@@ -1,12 +1,15 @@
-use crate::r1cs::{ConstraintSystem, R1CSError, R1CSProof, Variable};
+use crate::r1cs::{ConstraintSystem, R1CSError, R1CSProof, Variable, Prover, Verifier};
 use curve25519_dalek::scalar::Scalar;
 use crate::r1cs::value::AllocatedQuantity;
+use ::{BulletproofGens, PedersenGens};
+use merlin::Transcript;
+use curve25519_dalek::ristretto::CompressedRistretto;
 
 
-struct PositiveNo(R1CSProof);
+/*struct PositiveNoGadget {}
 
-impl PositiveNo {
-    fn gadget<CS: ConstraintSystem>(
+impl PositiveNoGadget {
+    fn constrain<CS: ConstraintSystem>(
         cs: &mut CS,
         v: AllocatedQuantity,
         n: usize,
@@ -37,10 +40,35 @@ impl PositiveNo {
 
         Ok(())
     }
-}
+
+    pub fn prover_commit<CS: ConstraintSystem>(
+        mut prover: &mut Prover,
+        value: u64,
+        max_bit_size: usize,
+    ) -> Result<
+        (
+            CompressedRistretto,
+            Variable
+        ),
+        R1CSError,
+    > {
+        let mut rng = rand::thread_rng();
+
+        let (com, var) = prover.commit(value.into(), Scalar::random(&mut rng));
+
+        let quantity = AllocatedQuantity {
+            variable: var,
+            assignment: Some(value),
+        };
+
+        Self::constrain(&mut prover, quantity, max_bit_size).unwrap();
+
+        Ok((com, var))
+    }
+}*/
 
 /// Enforces that the quantity of v is in the range [0, 2^n).
-pub fn fil_cs<CS: ConstraintSystem>(
+pub fn positive_no_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     v: AllocatedQuantity,
     n: usize,
@@ -51,7 +79,6 @@ pub fn fil_cs<CS: ConstraintSystem>(
         // Create low-level variables and add them to constraints
         let (a, b, o) = cs.allocate(|| {
             let q: u64 = v.assignment.ok_or(R1CSError::MissingAssignment)?;
-            //println!("q is {}", &q);
             let bit: u64 = (q >> i) & 1;
             Ok(((1 - bit).into(), bit.into(), Scalar::zero()))
         })?;
@@ -66,7 +93,7 @@ pub fn fil_cs<CS: ConstraintSystem>(
         exp_2 = exp_2 + exp_2;
     }
 
-    // Enforce that v = Sum(b_i * 2^i, i = 0..n-1)
+    // Enforce that -v + Sum(b_i * 2^i, i = 0..n-1) = 0 => Sum(b_i * 2^i, i = 0..n-1) = v
     cs.constrain(constraint.iter().collect());
 
     Ok(())
@@ -92,10 +119,7 @@ pub fn equality_gadget<CS: ConstraintSystem>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use r1cs::{Prover, Verifier};
-    use ::{BulletproofGens, PedersenGens};
     use merlin::Transcript;
-
 
     #[test]
     fn bound_check_gadget() {
@@ -109,12 +133,9 @@ mod tests {
         let v = rng.gen_range(min, max);
         println!("v is {}", &v);
         assert!(bound_check_helper(v, min, max).is_ok());
-        println!("Bound check successful for value in bound");
-        //assert!(bound_check_helper(max + 1, min, max).is_err());
     }
 
     fn bound_check_helper(v: u64, min: u64, max: u64) -> Result<(), R1CSError> {
-        // Common
         let pc_gens = PedersenGens::default();
         let bp_gens = BulletproofGens::new(128, 1);
 
@@ -135,22 +156,22 @@ mod tests {
 
             let mut prover = Prover::new(&bp_gens, &pc_gens, &mut prover_transcript);
 
-            // Constrain a in [0, 2^n-1]
+            // Constrain a in [0, 2^n)
             let (com_a, var_a) = prover.commit(a.into(), Scalar::random(&mut rng));
             let quantity_a = AllocatedQuantity {
                 variable: var_a,
                 assignment: Some(a),
             };
-            assert!(fil_cs(&mut prover, quantity_a, n).is_ok());
+            assert!(positive_no_gadget(&mut prover, quantity_a, n).is_ok());
             comms.push(com_a);
 
-            // Constrain b in [0, 2^n-1]
+            // Constrain b in [0, 2^n)
             let (com_b, var_b) = prover.commit(b.into(), Scalar::random(&mut rng));
             let quantity_b = AllocatedQuantity {
                 variable: var_b,
                 assignment: Some(b),
             };
-            assert!(fil_cs(&mut prover, quantity_b, n).is_ok());
+            assert!(positive_no_gadget(&mut prover, quantity_b, n).is_ok());
             comms.push(com_b);
 
             // Constrain a+b to be same as max-min. This ensures same v is used in both commitments (`com_a` and `com_b`)
@@ -182,14 +203,14 @@ mod tests {
             variable: var_a,
             assignment: None,
         };
-        assert!(fil_cs(&mut verifier, quantity_a, n).is_ok());
+        assert!(positive_no_gadget(&mut verifier, quantity_a, n).is_ok());
 
         let var_b = verifier.commit(commitments[1]);
         let quantity_b = AllocatedQuantity {
             variable: var_b,
             assignment: None,
         };
-        assert!(fil_cs(&mut verifier, quantity_b, n).is_ok());
+        assert!(positive_no_gadget(&mut verifier, quantity_b, n).is_ok());
 
         let var_ab = verifier.commit(commitments[2]);
         let quantity_ab = AllocatedQuantity {
@@ -198,67 +219,6 @@ mod tests {
         };
         assert!(equality_gadget(&mut verifier, quantity_ab, max-min).is_ok());
 
-
-        // Verifier verifies proof
-        Ok(verifier.verify(&proof)?)
-    }
-
-    #[test]
-    fn range_proof_gadget() {
-        use rand::rngs::OsRng;
-        use rand::Rng;
-
-        let mut rng = OsRng::new().unwrap();
-        let m = 3; // number of values to test per `n`
-
-        for n in [2, 10, 32, 63].iter() {
-            let (min, max) = (0u64, ((1u128 << n) - 1) as u64);
-            let values: Vec<u64> = (0..m).map(|_| rng.gen_range(min, max)).collect();
-            for v in values {
-                assert!(range_proof_helper(v, *n).is_ok());
-            }
-            assert!(range_proof_helper(max + 1, *n).is_err());
-        }
-    }
-
-    fn range_proof_helper(v_val: u64, n: usize) -> Result<(), R1CSError> {
-        // Common
-        let pc_gens = PedersenGens::default();
-        let bp_gens = BulletproofGens::new(128, 1);
-
-        // Prover's scope
-        let (proof, commitment) = {
-            // Prover makes a `ConstraintSystem` instance representing a range proof gadget
-            let mut prover_transcript = Transcript::new(b"RangeProofTest");
-            let mut rng = rand::thread_rng();
-
-            let mut prover = Prover::new(&bp_gens, &pc_gens, &mut prover_transcript);
-
-            let (com, var) = prover.commit(v_val.into(), Scalar::random(&mut rng));
-            let quantity = AllocatedQuantity {
-                variable: var,
-                assignment: Some(v_val),
-            };
-            assert!(fil_cs(&mut prover, quantity, n).is_ok());
-
-            println!("For {}, no of constraints is {}", v_val, &prover.num_constraints());
-            let proof = prover.prove()?;
-
-            (proof, com)
-        };
-
-        // Verifier makes a `ConstraintSystem` instance representing a merge gadget
-        let mut verifier_transcript = Transcript::new(b"RangeProofTest");
-        let mut verifier = Verifier::new(&bp_gens, &pc_gens, &mut verifier_transcript);
-
-        let var = verifier.commit(commitment);
-        let quantity = AllocatedQuantity {
-            variable: var,
-            assignment: None,
-        };
-
-        // Verifier adds constraints to the constraint system
-        assert!(fil_cs(&mut verifier, quantity, n).is_ok());
 
         // Verifier verifies proof
         Ok(verifier.verify(&proof)?)

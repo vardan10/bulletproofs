@@ -10,6 +10,7 @@ mod prover;
 mod verifier;
 pub mod value;
 pub mod gadget_range_proof;
+pub mod gadget_set_membership;
 
 pub use self::constraint_system::{ConstraintSystem, RandomizedConstraintSystem};
 pub use self::linear_combination::{LinearCombination, Variable};

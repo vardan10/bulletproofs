@@ -1,7 +1,7 @@
 #![feature(nll)]
 #![feature(external_doc)]
 #![feature(try_trait)]
-#![deny(missing_docs)]
+//#![deny(missing_docs)]
 #![doc(include = "../README.md")]
 #![doc(html_logo_url = "https://doc.dalek.rs/assets/dalek-logo-clear.png")]
 

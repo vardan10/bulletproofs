@@ -72,6 +72,23 @@ pub fn fil_cs<CS: ConstraintSystem>(
     Ok(())
 }
 
+// v and c should be equal
+pub fn equality_gadget<CS: ConstraintSystem>(
+    cs: &mut CS,
+    v: AllocatedQuantity,
+    c: u64,
+) -> Result<(), R1CSError> {
+    let (a, b, o) = cs.allocate(|| {
+        let x: u64 = v.assignment.ok_or(R1CSError::MissingAssignment)?;
+        Ok(((x-c).into(), Scalar::one(), Scalar::zero()))
+    })?;
+
+    cs.constrain(o.into());
+    cs.constrain(a.into());
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,9 +125,6 @@ mod tests {
         let b = max - v;
         println!("a, b are {} {}", &a, &b);
 
-        // TODO: Need modulo curve order
-        let c = a * b;
-
         // Prover's scope
         let (proof, commitments) = {
             let mut comms = vec![];
@@ -121,53 +135,69 @@ mod tests {
 
             let mut prover = Prover::new(&bp_gens, &pc_gens, &mut prover_transcript);
 
-            let (com1, var1) = prover.commit(a.into(), Scalar::random(&mut rng));
-            let quantity1 = AllocatedQuantity {
-                variable: var1,
+            // Constrain a in [0, 2^n-1]
+            let (com_a, var_a) = prover.commit(a.into(), Scalar::random(&mut rng));
+            let quantity_a = AllocatedQuantity {
+                variable: var_a,
                 assignment: Some(a),
             };
-            assert!(fil_cs(&mut prover, quantity1, n).is_ok());
-            comms.push(com1);
+            assert!(fil_cs(&mut prover, quantity_a, n).is_ok());
+            comms.push(com_a);
 
-            let (com2, var2) = prover.commit(b.into(), Scalar::random(&mut rng));
-            let quantity2 = AllocatedQuantity {
-                variable: var2,
+            // Constrain b in [0, 2^n-1]
+            let (com_b, var_b) = prover.commit(b.into(), Scalar::random(&mut rng));
+            let quantity_b = AllocatedQuantity {
+                variable: var_b,
                 assignment: Some(b),
             };
-            assert!(fil_cs(&mut prover, quantity2, n).is_ok());
-            comms.push(com2);
+            assert!(fil_cs(&mut prover, quantity_b, n).is_ok());
+            comms.push(com_b);
 
-            let (com3, var3) = prover.commit(c.into(), Scalar::random(&mut rng));
-            let quantity3 = AllocatedQuantity {
-                variable: var3,
-                assignment: Some(c),
+            // Constrain a+b to be same as max-min. This ensures same v is used in both commitments (`com_a` and `com_b`)
+            let (com_ab, var_ab) = prover.commit((a+b).into(), Scalar::random(&mut rng));
+            let quantity_ab = AllocatedQuantity {
+                variable: var_ab,
+                assignment: Some(a+b),
             };
-            assert!(fil_cs(&mut prover, quantity3, n).is_ok());
-            comms.push(com3);
+            assert!(equality_gadget(&mut prover, quantity_ab, max-min).is_ok());
+            comms.push(com_ab);
 
             println!("For {} in ({}, {}), no of constraints is {}", v, min, max, &prover.num_constraints());
-            println!("Prover commitments {:?}", &comms);
+//            println!("Prover commitments {:?}", &comms);
             let proof = prover.prove()?;
 
             (proof, comms)
         };
 
+        println!("Proving done");
+
         // Verifier makes a `ConstraintSystem` instance representing a merge gadget
         let mut verifier_transcript = Transcript::new(b"BoundsTest");
         let mut verifier = Verifier::new(&bp_gens, &pc_gens, &mut verifier_transcript);
 
-        println!("Verifier commitments {:?}", &commitments);
+//        println!("Verifier commitments {:?}", &commitments);
 
-        for commitment in commitments {
-            let var = verifier.commit(commitment);
-            let quantity = AllocatedQuantity {
-                variable: var,
-                assignment: None,
-            };
+        let var_a = verifier.commit(commitments[0]);
+        let quantity_a = AllocatedQuantity {
+            variable: var_a,
+            assignment: None,
+        };
+        assert!(fil_cs(&mut verifier, quantity_a, n).is_ok());
 
-            // Verifier adds constraints to the constraint system
-            assert!(fil_cs(&mut verifier, quantity, n).is_ok());
-        }
+        let var_b = verifier.commit(commitments[1]);
+        let quantity_b = AllocatedQuantity {
+            variable: var_b,
+            assignment: None,
+        };
+        assert!(fil_cs(&mut verifier, quantity_b, n).is_ok());
+
+        let var_ab = verifier.commit(commitments[2]);
+        let quantity_ab = AllocatedQuantity {
+            variable: var_ab,
+            assignment: None,
+        };
+        assert!(equality_gadget(&mut verifier, quantity_ab, max-min).is_ok());
+
 
         // Verifier verifies proof
         Ok(verifier.verify(&proof)?)

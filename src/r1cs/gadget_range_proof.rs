@@ -4,6 +4,7 @@ use crate::r1cs::value::AllocatedQuantity;
 use ::{BulletproofGens, PedersenGens};
 use merlin::Transcript;
 use curve25519_dalek::ristretto::CompressedRistretto;
+use r1cs::LinearCombination;
 
 
 /*struct PositiveNoGadget {}
@@ -110,8 +111,18 @@ pub fn equality_gadget<CS: ConstraintSystem>(
         Ok(((x-c).into(), Scalar::one(), Scalar::zero()))
     })?;
 
-    cs.constrain(o.into());
+    // a should be (v-c) => a - (v-c) = 0 => a + (c-v) = 0
+    let c_minus_v: LinearCombination = [(Variable::One(), Scalar::from(c)), (v.variable, -Scalar::one())].iter().collect();
+    cs.constrain(a + c_minus_v);
+
+    // Circuit variable a should be 0
     cs.constrain(a.into());
+
+    // Circuit variable b should be 1
+    cs.constrain(b - Scalar::one());
+
+    // Circuit variable o should be 0
+    cs.constrain(o.into());
 
     Ok(())
 }

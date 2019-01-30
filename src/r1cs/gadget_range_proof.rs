@@ -101,7 +101,7 @@ pub fn positive_no_gadget<CS: ConstraintSystem>(
 }
 
 // v and c should be equal
-pub fn equality_gadget<CS: ConstraintSystem>(
+/*pub fn equality_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     v: AllocatedQuantity,
     c: u64,
@@ -125,7 +125,7 @@ pub fn equality_gadget<CS: ConstraintSystem>(
     cs.constrain(o.into());
 
     Ok(())
-}
+}*/
 
 #[cfg(test)]
 mod tests {
@@ -186,13 +186,15 @@ mod tests {
             comms.push(com_b);
 
             // Constrain a+b to be same as max-min. This ensures same v is used in both commitments (`com_a` and `com_b`)
-            let (com_ab, var_ab) = prover.commit((a+b).into(), Scalar::random(&mut rng));
+            /*let (com_ab, var_ab) = prover.commit((a+b).into(), Scalar::random(&mut rng));
             let quantity_ab = AllocatedQuantity {
                 variable: var_ab,
                 assignment: Some(a+b),
             };
             assert!(equality_gadget(&mut prover, quantity_ab, max-min).is_ok());
-            comms.push(com_ab);
+            comms.push(com_ab);*/
+            let var_c = LinearCombination {terms: vec![(Variable::One(), (max-min).into())]};
+            prover.constrain(var_a + var_b - var_c);
 
             println!("For {} in ({}, {}), no of constraints is {}", v, min, max, &prover.num_constraints());
 //            println!("Prover commitments {:?}", &comms);
@@ -206,8 +208,6 @@ mod tests {
         // Verifier makes a `ConstraintSystem` instance representing a merge gadget
         let mut verifier_transcript = Transcript::new(b"BoundsTest");
         let mut verifier = Verifier::new(&bp_gens, &pc_gens, &mut verifier_transcript);
-
-//        println!("Verifier commitments {:?}", &commitments);
 
         let var_a = verifier.commit(commitments[0]);
         let quantity_a = AllocatedQuantity {
@@ -223,13 +223,16 @@ mod tests {
         };
         assert!(positive_no_gadget(&mut verifier, quantity_b, n).is_ok());
 
-        let var_ab = verifier.commit(commitments[2]);
+//        println!("Verifier commitments {:?}", &commitments);
+
+        /*let var_ab = verifier.commit(commitments[2]);
         let quantity_ab = AllocatedQuantity {
             variable: var_ab,
             assignment: None,
         };
-        assert!(equality_gadget(&mut verifier, quantity_ab, max-min).is_ok());
-
+        assert!(equality_gadget(&mut verifier, quantity_ab, max-min).is_ok());*/
+        let var_c = LinearCombination {terms: vec![(Variable::One(), (max-min).into())]};
+        verifier.constrain(var_a + var_b - var_c);
 
         // Verifier verifies proof
         Ok(verifier.verify(&proof)?)

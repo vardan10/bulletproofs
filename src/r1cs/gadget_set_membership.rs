@@ -77,6 +77,7 @@ pub fn vector_sum_gadget<CS: ConstraintSystem>(
 }
 
 // TODO: Find better name
+// Ensure items[i]*vector[i] = 
 pub fn vector_product_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     items: &[u64],
@@ -93,8 +94,6 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
 
         let item_var = LinearCombination {terms: vec![(Variable::One(), items[i].into())]};
         cs.constrain(a - item_var);
-
-        cs.constrain(o - (a+b));
     }
 
     Ok(())
@@ -146,13 +145,7 @@ mod tests {
             }
 
             // The bit vector sum should be 1
-            /*let (com_sum, var_sum) = prover.commit(Scalar::one(), Scalar::random(&mut rng));
-            let quantity_sum = AllocatedQuantity {
-                variable: var_sum,
-                assignment: Some(1),
-            };*/
             assert!(vector_sum_gadget(&mut prover, &bit_vars, 1).is_ok());
-            //comms.push(com_sum);
 
             let (com_value, var_value) = prover.commit(value.into(), Scalar::random(&mut rng));
             let quantity_value = AllocatedQuantity {
@@ -183,11 +176,6 @@ mod tests {
             bit_vars.push(quantity);
         }
 
-        /*let var_sum = verifier.commit(commitments[set_length]);
-        let quantity_sum = AllocatedQuantity {
-            variable: var_sum,
-            assignment: None,
-        };*/
         assert!(vector_sum_gadget(&mut verifier, &bit_vars, 1).is_ok());
 
         let var_val = verifier.commit(commitments[set_length]);
@@ -197,6 +185,8 @@ mod tests {
         };
 
         assert!(vector_product_gadget(&mut verifier, &set, &bit_vars, &quantity_value).is_ok());
+
+//        println!("Verifier commitments {:?}", &commitments);
 
         Ok(verifier.verify(&proof)?)
     }

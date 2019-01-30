@@ -77,7 +77,7 @@ pub fn vector_sum_gadget<CS: ConstraintSystem>(
 }
 
 // TODO: Find better name
-// Ensure items[i]*vector[i] = 
+// Ensure items[i] * vector[i] = vector[i] * value
 pub fn vector_product_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     items: &[u64],
@@ -113,6 +113,10 @@ mod tests {
         assert!(set_membership_check_helper(value, set).is_ok());
     }
 
+    // Allocate a bitmap for the `set` with 1 as the index of `value`, 0 ottherwise. Then commit to values of bitmap
+    // and prove that each element is either 0 or 1, sum of elements of this bitmap is 1 (as there is only 1 element)
+    // and the relation set[i] * bitmap[i] = bitmap[i] * value.
+    // Taken from https://github.com/HarryR/ethsnarks/blob/master/src/gadgets/one_of_n.hpp
     fn set_membership_check_helper(value: u64, set: Vec<u64>) -> Result<(), R1CSError> {
         let pc_gens = PedersenGens::default();
         let bp_gens = BulletproofGens::new(128, 1);

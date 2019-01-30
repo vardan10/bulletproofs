@@ -41,6 +41,15 @@ name = "range_proof"
 name = "r1cs"
 required-features = ["yoloproofs"]
 
+[[test]]
+name = "gadget_range_proof"
+required-features = ["yoloproofs"]
+
+
+[[test]]
+name = "gadget_set_membership"
+required-features = ["yoloproofs"]
+
 [[bench]]
 name = "range_proof"
 harness = false

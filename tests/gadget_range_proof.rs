@@ -1,10 +1,15 @@
-use crate::r1cs::{ConstraintSystem, R1CSError, R1CSProof, Variable, Prover, Verifier};
+extern crate bulletproofs;
+extern crate curve25519_dalek;
+extern crate merlin;
+extern crate rand;
+
+use bulletproofs::r1cs::{ConstraintSystem, R1CSError, R1CSProof, Variable, Prover, Verifier};
 use curve25519_dalek::scalar::Scalar;
-use crate::r1cs::value::AllocatedQuantity;
-use ::{BulletproofGens, PedersenGens};
+use bulletproofs::r1cs::value::AllocatedQuantity;
+use bulletproofs::{BulletproofGens, PedersenGens};
 use merlin::Transcript;
 use curve25519_dalek::ristretto::CompressedRistretto;
-use r1cs::LinearCombination;
+use bulletproofs::r1cs::LinearCombination;
 
 
 /*struct PositiveNoGadget {}

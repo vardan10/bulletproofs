@@ -1,10 +1,14 @@
-use crate::r1cs::{ConstraintSystem, R1CSError, R1CSProof, Variable, Prover, Verifier};
+extern crate bulletproofs;
+extern crate curve25519_dalek;
+extern crate merlin;
+
+use bulletproofs::r1cs::{ConstraintSystem, R1CSError, R1CSProof, Variable, Prover, Verifier};
 use curve25519_dalek::scalar::Scalar;
-use crate::r1cs::value::AllocatedQuantity;
-use ::{BulletproofGens, PedersenGens};
+use bulletproofs::r1cs::value::AllocatedQuantity;
+use bulletproofs::{BulletproofGens, PedersenGens};
 use merlin::Transcript;
 use curve25519_dalek::ristretto::CompressedRistretto;
-use r1cs::LinearCombination;
+use bulletproofs::r1cs::LinearCombination;
 
 
 // Ensure `v` is a bit, hence 0 or 1
@@ -12,11 +16,13 @@ pub fn bit_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     v: AllocatedQuantity
 ) -> Result<(), R1CSError> {
+    // TODO: Possible to save reallocation of `v` in `bit`?
     let (a, b, o) = cs.allocate(|| {
         let bit: u64 = v.assignment.ok_or(R1CSError::MissingAssignment)?;
         Ok(((1 - bit).into(), bit.into(), Scalar::zero()))
     })?;
 
+    // Might not be necessary if above TODO is addressed
     // Variable b is same as v so b +
     let neg_v = LinearCombination {terms: vec![(v.variable, -Scalar::one())]};
     cs.constrain(b + neg_v);
@@ -24,6 +30,7 @@ pub fn bit_gadget<CS: ConstraintSystem>(
     // Enforce a * b = 0, so one of (a,b) is zero
     cs.constrain(o.into());
 
+    // Might not be necessary if above TODO is addressed
     // Enforce that a = 1 - b, so they both are 1 or 0.
     cs.constrain(a + (b - 1u64));
 
@@ -36,43 +43,13 @@ pub fn vector_sum_gadget<CS: ConstraintSystem>(
     vector: &[AllocatedQuantity],
     sum: u64
 ) -> Result<(), R1CSError> {
-    let mut vector_running_sum_vars: Vec<Variable> = vec![];
-    let mut vector_running_sum_vals: Vec<u64> = vec![];
-
-    for i in 0..vector.len() {
-        let (a, b, o) = cs.allocate(|| {
-            let bit: u64 = vector[i].assignment.ok_or(R1CSError::MissingAssignment)?;
-            if i == 0 {
-                vector_running_sum_vals.push(bit);
-                Ok((bit.into(), Scalar::one(), bit.into()))
-            } else {
-                let r = vector_running_sum_vals[i-1] + bit;
-                vector_running_sum_vals.push(r);
-                Ok((r.into(), Scalar::one(), r.into()))
-            }
-        })?;
-
-        vector_running_sum_vars.push(o);
-
-        // Left wire should have appropriate value
-        if i == 0 {
-            cs.constrain(a - vector[i].variable);
-        } else {
-            cs.constrain(a - (vector_running_sum_vars[i-1] + vector[i].variable));
-        }
-
-        // output wire is same as left input wire
-        cs.constrain(o - a);
-
-        // right input wire is 1
-        cs.constrain(b - Scalar::one());
-
-        // last output wire should be equal to sum
-        if i == (vector.len()-1) {
-            let sum_var = LinearCombination {terms: vec![(Variable::One(), sum.into())]};
-            cs.constrain(o - sum_var);
-        }
+    let mut constraints: Vec<(Variable, Scalar)> = vec![(Variable::One(), -Scalar::from(sum))];
+    for i in vector {
+        constraints.push((i.variable, Scalar::one()));
     }
+
+    cs.constrain(constraints.iter().collect());
+
     Ok(())
 }
 
@@ -86,6 +63,7 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
 ) -> Result<(), R1CSError> {
     for i in 0..items.len() {
 
+        // TODO: Possible to save reallocation of elements of `vector` in `bit`?
         let (a, b, o) = cs.allocate(|| {
             let bit: u64 = vector[i].assignment.ok_or(R1CSError::MissingAssignment)?;
             let val = value.assignment.ok_or(R1CSError::MissingAssignment)?;
@@ -113,7 +91,7 @@ mod tests {
         assert!(set_membership_check_helper(value, set).is_ok());
     }
 
-    // Allocate a bitmap for the `set` with 1 as the index of `value`, 0 ottherwise. Then commit to values of bitmap
+    // Allocate a bitmap for the `set` with 1 as the index of `value`, 0 otherwise. Then commit to values of bitmap
     // and prove that each element is either 0 or 1, sum of elements of this bitmap is 1 (as there is only 1 element)
     // and the relation set[i] * bitmap[i] = bitmap[i] * value.
     // Taken from https://github.com/HarryR/ethsnarks/blob/master/src/gadgets/one_of_n.hpp

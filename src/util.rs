@@ -98,7 +98,7 @@ impl VecPoly1 {
         let n = self.0.len();
         let mut out = vec![Scalar::zero(); n];
         for i in 0..n {
-            out[i] += self.0[i] + self.1[i] * x;
+            out[i] = self.0[i] + self.1[i] * x;
         }
         out
     }
@@ -143,7 +143,7 @@ impl VecPoly3 {
         let n = self.0.len();
         let mut out = vec![Scalar::zero(); n];
         for i in 0..n {
-            out[i] += self.0[i] + x * (self.1[i] + x * (self.2[i] + x * self.3[i]));
+            out[i] = self.0[i] + x * (self.1[i] + x * (self.2[i] + x * self.3[i]));
         }
         out
     }

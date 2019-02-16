@@ -16,6 +16,8 @@ mod tests {
 
     #[test]
     fn test_factor_r1cs() {
+        // Prove knowledge of `p` and `q` such that given an `r`, `p * q = r`
+
         let pc_gens = PedersenGens::default();
         let bp_gens = BulletproofGens::new(128, 1);
 
@@ -30,11 +32,15 @@ mod tests {
             let (com_p, var_p) = prover.commit(p.into(), Scalar::random(&mut rng));
             let (com_q, var_q) = prover.commit(q.into(), Scalar::random(&mut rng));
 
-            let (a, b, o) = prover.allocate(|| {
+            /*prover.allocate(|| {
                 Ok((p.into(), q.into(), r.into()))
             }).unwrap();
             prover.constrain(var_p - a);
-            prover.constrain(var_q - b);
+            prover.constrain(var_q - b);*/
+
+            let (_, _, o) =  prover.multiply(var_p.into(), var_q.into());
+            let lc: LinearCombination = vec![(Variable::One(), r.into())].iter().collect();
+            prover.constrain(o -  lc);
 
             let proof = prover.prove().unwrap();
 
@@ -46,12 +52,59 @@ mod tests {
         let var_p = verifier.commit(commitments.0);
         let var_q = verifier.commit(commitments.1);
 
-        let (a, b, o) = verifier.allocate(|| {
+        /*let (a, b, o) = verifier.allocate(|| {
             Err(R1CSError::MissingAssignment)
         }).unwrap();
 
         verifier.constrain(var_p - a);
-        verifier.constrain(var_q - b);
+        verifier.constrain(var_q - b);*/
+
+        let (_, _, o) =  verifier.multiply(var_p.into(), var_q.into());
+        let lc: LinearCombination = vec![(Variable::One(), r.into())].iter().collect();
+        verifier.constrain(o -  lc);
+
+        assert!(verifier.verify(&proof).is_ok());
+    }
+
+    #[test]
+    fn test_factor_r1cs_2() {
+        // Prove knowledge of `p` and `q` such that given an `r`, `p * q = r`
+
+        let pc_gens = PedersenGens::default();
+        let bp_gens = BulletproofGens::new(128, 1);
+
+        let (p, q, r, s) = (5u64, 7u64, 3u64, 105u64);
+
+        let (proof, commitments) = {
+            let mut prover_transcript = Transcript::new(b"Factors");
+            let mut prover = Prover::new(&bp_gens, &pc_gens, &mut prover_transcript);
+
+            let mut rng = rand::thread_rng();
+
+            let (com_p, var_p) = prover.commit(p.into(), Scalar::random(&mut rng));
+            let (com_q, var_q) = prover.commit(q.into(), Scalar::random(&mut rng));
+            let (com_r, var_r) = prover.commit(r.into(), Scalar::random(&mut rng));
+
+            let (_, _, o1) =  prover.multiply(var_p.into(), var_q.into());
+            let (_, _, o2) =  prover.multiply(o1.into(), var_r.into());
+            let lc: LinearCombination = vec![(Variable::One(), s.into())].iter().collect();
+            prover.constrain(o2 -  lc);
+
+            let proof = prover.prove().unwrap();
+
+            (proof, (com_p, com_q, com_r))
+        };
+
+        let mut verifier_transcript = Transcript::new(b"Factors");
+        let mut verifier = Verifier::new(&bp_gens, &pc_gens, &mut verifier_transcript);
+        let var_p = verifier.commit(commitments.0);
+        let var_q = verifier.commit(commitments.1);
+        let var_r = verifier.commit(commitments.2);
+
+        let (_, _, o1) =  verifier.multiply(var_p.into(), var_q.into());
+        let (_, _, o2) =  verifier.multiply(o1.into(), var_r.into());
+        let lc: LinearCombination = vec![(Variable::One(), s.into())].iter().collect();
+        verifier.constrain(o2 -  lc);
 
         assert!(verifier.verify(&proof).is_ok());
     }

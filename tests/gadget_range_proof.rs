@@ -198,7 +198,7 @@ mod tests {
             };
             assert!(equality_gadget(&mut prover, quantity_ab, max-min).is_ok());
             comms.push(com_ab);*/
-            let var_c = LinearCombination {terms: vec![(Variable::One(), (max-min).into())]};
+            let var_c: LinearCombination =  vec![(Variable::One(), (max-min).into())].iter().collect();
             prover.constrain(var_a + var_b - var_c);
 
             println!("For {} in ({}, {}), no of constraints is {}", v, min, max, &prover.num_constraints());
@@ -236,7 +236,7 @@ mod tests {
             assignment: None,
         };
         assert!(equality_gadget(&mut verifier, quantity_ab, max-min).is_ok());*/
-        let var_c = LinearCombination {terms: vec![(Variable::One(), (max-min).into())]};
+        let var_c: LinearCombination = vec![(Variable::One(), (max-min).into())].iter().collect();
         verifier.constrain(var_a + var_b - var_c);
 
         // Verifier verifies proof

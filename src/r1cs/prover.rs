@@ -13,6 +13,7 @@ use errors::R1CSError;
 use generators::{BulletproofGens, PedersenGens};
 use inner_product_proof::InnerProductProof;
 use transcript::TranscriptProtocol;
+use inner_product_proof::inner_product;
 
 /// A [`ConstraintSystem`] implementation for use by the prover.
 ///
@@ -558,6 +559,8 @@ impl<'a, 'b> Prover<'a, 'b> {
 
         let mut r_vec = r_poly.eval(x);
         r_vec.append(&mut vec![Scalar::zero(); pad]);
+
+        let ip = inner_product(&l_vec, &r_vec);
 
         // XXX this should refer to the notes to explain why this is correct
         for i in n..padded_n {

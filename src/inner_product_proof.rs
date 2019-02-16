@@ -64,7 +64,7 @@ impl InnerProductProof {
         assert!(n.is_power_of_two());
 
         transcript.innerproduct_domain_sep(n as u64);
-
+        let c = inner_product(&a, &b);
         let lg_n = n.next_power_of_two().trailing_zeros() as usize;
         let mut L_vec = Vec::with_capacity(lg_n);
         let mut R_vec = Vec::with_capacity(lg_n);
@@ -77,17 +77,19 @@ impl InnerProductProof {
             let (b_L, b_R) = b.split_at_mut(n);
             let (G_L, G_R) = G.split_at_mut(n);
             let (H_L, H_R) = H.split_at_mut(n);
+            let (G_factors_L, G_factors_R) = G_factors.split_at(n);
+            let (H_factors_L, H_factors_R) = H_factors.split_at(n);
 
             let c_L = inner_product(&a_L, &b_R);
             let c_R = inner_product(&a_R, &b_L);
 
             let L = RistrettoPoint::vartime_multiscalar_mul(
                 a_L.iter()
-                    .zip(G_factors[n..2 * n].into_iter())
+                    .zip(G_factors_R.into_iter())
                     .map(|(a_L_i, g)| a_L_i * g)
                     .chain(
                         b_R.iter()
-                            .zip(H_factors[0..n].into_iter())
+                            .zip(H_factors_L.into_iter())
                             .map(|(b_R_i, h)| b_R_i * h),
                     )
                     .chain(iter::once(c_L)),
@@ -97,11 +99,11 @@ impl InnerProductProof {
 
             let R = RistrettoPoint::vartime_multiscalar_mul(
                 a_R.iter()
-                    .zip(G_factors[0..n].into_iter())
+                    .zip(G_factors_L.into_iter())
                     .map(|(a_R_i, g)| a_R_i * g)
                     .chain(
                         b_L.iter()
-                            .zip(H_factors[n..2 * n].into_iter())
+                            .zip(H_factors_R.into_iter())
                             .map(|(b_L_i, h)| b_L_i * h),
                     )
                     .chain(iter::once(c_R)),
@@ -131,6 +133,10 @@ impl InnerProductProof {
                 )
             }
 
+            let x1 = inner_product(&a_L, &b_L);
+            println!("c={:?}", &c);
+            println!("x1={:?}", &x1);
+            println!("c-x1={:?}", c - x1);
             a = a_L;
             b = b_L;
             G = G_L;
@@ -433,7 +439,6 @@ mod tests {
         // y_inv is (the inverse of) a random challenge
         let y_inv = Scalar::random(&mut rng);
         let H_factors: Vec<Scalar> = util::exp_iter(y_inv).take(n).collect();
-
         // P would be determined upstream, but we need a correct P to check the proof.
         //
         // To generate P = <a,G> + <b,H'> + <a,b> Q, compute

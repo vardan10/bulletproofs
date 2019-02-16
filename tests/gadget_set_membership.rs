@@ -24,7 +24,7 @@ pub fn bit_gadget<CS: ConstraintSystem>(
 
     // Might not be necessary if above TODO is addressed
     // Variable b is same as v so b +
-    let neg_v = LinearCombination {terms: vec![(v.variable, -Scalar::one())]};
+    let neg_v: LinearCombination = vec![(v.variable, -Scalar::one())].iter().collect();
     cs.constrain(b + neg_v);
 
     // Enforce a * b = 0, so one of (a,b) is zero
@@ -70,7 +70,7 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
             Ok((items[i].into(), bit.into(), (bit*val).into()))
         })?;
 
-        let item_var = LinearCombination {terms: vec![(Variable::One(), items[i].into())]};
+        let item_var: LinearCombination = vec![(Variable::One(), items[i].into())].iter().collect();
         cs.constrain(a - item_var);
     }
 

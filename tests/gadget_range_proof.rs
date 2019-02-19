@@ -191,13 +191,6 @@ mod tests {
             comms.push(com_b);
 
             // Constrain a+b to be same as max-min. This ensures same v is used in both commitments (`com_a` and `com_b`)
-            /*let (com_ab, var_ab) = prover.commit((a+b).into(), Scalar::random(&mut rng));
-            let quantity_ab = AllocatedQuantity {
-                variable: var_ab,
-                assignment: Some(a+b),
-            };
-            assert!(equality_gadget(&mut prover, quantity_ab, max-min).is_ok());
-            comms.push(com_ab);*/
             let var_c: LinearCombination =  vec![(Variable::One(), (max-min).into())].iter().collect();
             prover.constrain(var_a + var_b - var_c);
 
@@ -230,12 +223,6 @@ mod tests {
 
 //        println!("Verifier commitments {:?}", &commitments);
 
-        /*let var_ab = verifier.commit(commitments[2]);
-        let quantity_ab = AllocatedQuantity {
-            variable: var_ab,
-            assignment: None,
-        };
-        assert!(equality_gadget(&mut verifier, quantity_ab, max-min).is_ok());*/
         let var_c: LinearCombination = vec![(Variable::One(), (max-min).into())].iter().collect();
         verifier.constrain(var_a + var_b - var_c);
 

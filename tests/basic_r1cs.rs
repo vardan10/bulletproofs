@@ -18,6 +18,7 @@ mod tests {
     fn test_factor_r1cs() {
         // Prove knowledge of `p` and `q` such that given an `r`, `p * q = r`
 
+        // TODO: Prove that neither `p` or `q` is 1, this can be done range proof gadget.
         let pc_gens = PedersenGens::default();
         let bp_gens = BulletproofGens::new(128, 1);
 
@@ -31,12 +32,6 @@ mod tests {
 
             let (com_p, var_p) = prover.commit(p.into(), Scalar::random(&mut rng));
             let (com_q, var_q) = prover.commit(q.into(), Scalar::random(&mut rng));
-
-            /*prover.allocate(|| {
-                Ok((p.into(), q.into(), r.into()))
-            }).unwrap();
-            prover.constrain(var_p - a);
-            prover.constrain(var_q - b);*/
 
             let (_, _, o) =  prover.multiply(var_p.into(), var_q.into());
             let lc: LinearCombination = vec![(Variable::One(), r.into())].iter().collect();
@@ -52,13 +47,6 @@ mod tests {
         let var_p = verifier.commit(commitments.0);
         let var_q = verifier.commit(commitments.1);
 
-        /*let (a, b, o) = verifier.allocate(|| {
-            Err(R1CSError::MissingAssignment)
-        }).unwrap();
-
-        verifier.constrain(var_p - a);
-        verifier.constrain(var_q - b);*/
-
         let (_, _, o) =  verifier.multiply(var_p.into(), var_q.into());
         let lc: LinearCombination = vec![(Variable::One(), r.into())].iter().collect();
         verifier.constrain(o -  lc);
@@ -68,8 +56,9 @@ mod tests {
 
     #[test]
     fn test_factor_r1cs_2() {
-        // Prove knowledge of `p` and `q` such that given an `r`, `p * q = r`
+        // Prove knowledge of `p`, `q` and `r` such that given an `s`, `p * q * r = s`
 
+        // TODO: Prove that neither `p` or `q` or `r` is 1, this can be done range proof gadget.
         let pc_gens = PedersenGens::default();
         let bp_gens = BulletproofGens::new(128, 1);
 

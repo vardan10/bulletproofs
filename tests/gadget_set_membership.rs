@@ -53,7 +53,7 @@ pub fn vector_sum_gadget<CS: ConstraintSystem>(
     Ok(())
 }
 
-// TODO: Find better name
+// TODO: Find better name for function
 // Ensure items[i] * vector[i] = vector[i] * value
 pub fn vector_product_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
@@ -61,6 +61,8 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
     vector: &[AllocatedQuantity],
     value: &AllocatedQuantity
 ) -> Result<(), R1CSError> {
+    let mut constraints = vec![(value.variable, -Scalar::one())];
+
     for i in 0..items.len() {
 
         // TODO: Possible to save reallocation of elements of `vector` in `bit`?
@@ -70,9 +72,16 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
             Ok((items[i].into(), bit.into(), (bit*val).into()))
         })?;
 
+        constraints.push((o, Scalar::one()));
+
         let item_var: LinearCombination = vec![(Variable::One(), items[i].into())].iter().collect();
         cs.constrain(a - item_var);
+
+        // Each `b` is already constrained to be 0 or 1
     }
+
+    // Constrain the sum of output variables to be equal to the value of committed variables
+    cs.constrain(constraints.iter().collect());
 
     Ok(())
 }

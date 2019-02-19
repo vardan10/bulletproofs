@@ -134,9 +134,6 @@ impl InnerProductProof {
             }
 
             let x1 = inner_product(&a_L, &b_L);
-            println!("c={:?}", &c);
-            println!("x1={:?}", &x1);
-            println!("c-x1={:?}", c - x1);
             a = a_L;
             b = b_L;
             G = G_L;

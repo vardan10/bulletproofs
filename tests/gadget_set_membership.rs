@@ -4,12 +4,12 @@ extern crate merlin;
 
 use bulletproofs::r1cs::{ConstraintSystem, R1CSError, R1CSProof, Variable, Prover, Verifier};
 use curve25519_dalek::scalar::Scalar;
-use bulletproofs::r1cs::value::AllocatedQuantity;
 use bulletproofs::{BulletproofGens, PedersenGens};
-use merlin::Transcript;
 use curve25519_dalek::ristretto::CompressedRistretto;
 use bulletproofs::r1cs::LinearCombination;
 
+mod utils;
+use utils::AllocatedQuantity;
 
 // Ensure `v` is a bit, hence 0 or 1
 pub fn bit_gadget<CS: ConstraintSystem>(
@@ -80,7 +80,7 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
         // Each `b` is already constrained to be 0 or 1
     }
 
-    // Constrain the sum of output variables to be equal to the value of committed variables
+    // Constrain the sum of output variables to be equal to the value of committed variable
     cs.constrain(constraints.iter().collect());
 
     Ok(())

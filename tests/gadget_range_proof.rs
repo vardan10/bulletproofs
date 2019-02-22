@@ -5,12 +5,13 @@ extern crate rand;
 
 use bulletproofs::r1cs::{ConstraintSystem, R1CSError, R1CSProof, Variable, Prover, Verifier};
 use curve25519_dalek::scalar::Scalar;
-use bulletproofs::r1cs::value::AllocatedQuantity;
 use bulletproofs::{BulletproofGens, PedersenGens};
 use merlin::Transcript;
 use curve25519_dalek::ristretto::CompressedRistretto;
 use bulletproofs::r1cs::LinearCombination;
 
+mod utils;
+use utils::AllocatedQuantity;
 
 /*struct PositiveNoGadget {}
 
@@ -77,8 +78,8 @@ impl PositiveNoGadget {
 pub fn positive_no_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     v: AllocatedQuantity,
-    n: usize,
-) -> Result<(), R1CSError> {
+    n: usize
+    ,) -> Result<(), R1CSError> {
     let mut constraint = vec![(v.variable, -Scalar::one())];
     let mut exp_2 = Scalar::one();
     for i in 0..n {

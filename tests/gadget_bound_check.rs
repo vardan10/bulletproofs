@@ -31,9 +31,12 @@ pub fn bound_check_gadget<CS: ConstraintSystem>(
     // a + b = max - min
     let lc_max_minus_min: LinearCombination = vec![(Variable::One(), Scalar::from(max-min))].iter().collect();
 
+    // Constrain a + b to be same as max - min.
     cs.constrain(a.variable + b.variable - lc_max_minus_min);
 
+    // Constrain a in [0, 2^n)
     assert!(positive_no_gadget(cs, a, n).is_ok());
+    // Constrain b in [0, 2^n)
     assert!(positive_no_gadget(cs, b, n).is_ok());
 
     Ok(())

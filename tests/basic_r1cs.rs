@@ -17,7 +17,7 @@ mod tests {
     fn test_factor_r1cs() {
         // Prove knowledge of `p` and `q` such that given an `r`, `p * q = r`
 
-        // TODO: Prove that neither `p` or `q` is 1, this can be done range proof gadget.
+        // TODO: Prove that neither `p` or `q` is 1, this can be done range proof gadget or using the `not_equals_gadget`
         let pc_gens = PedersenGens::default();
         let bp_gens = BulletproofGens::new(128, 1);
 

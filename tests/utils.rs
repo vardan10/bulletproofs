@@ -80,3 +80,35 @@ pub fn is_nonzero_gadget<CS: ConstraintSystem>(
     cs.constrain(o3 - one_lc);
     Ok(())
 }
+
+/// Enforces that the quantity of v is in the range [0, 2^n).
+pub fn positive_no_gadget<CS: ConstraintSystem>(
+    cs: &mut CS,
+    v: AllocatedQuantity,
+    n: usize
+    ,) -> Result<(), R1CSError> {
+    let mut constraint = vec![(v.variable, -Scalar::one())];
+    let mut exp_2 = Scalar::one();
+    for i in 0..n {
+        // Create low-level variables and add them to constraints
+        let (a, b, o) = cs.allocate(|| {
+            let q: u64 = v.assignment.ok_or(R1CSError::MissingAssignment)?;
+            let bit: u64 = (q >> i) & 1;
+            Ok(((1 - bit).into(), bit.into(), Scalar::zero()))
+        })?;
+
+        // Enforce a * b = 0, so one of (a,b) is zero
+        cs.constrain(o.into());
+
+        // Enforce that a = 1 - b, so they both are 1 or 0.
+        cs.constrain(a + (b - 1u64));
+
+        constraint.push((b, exp_2)  );
+        exp_2 = exp_2 + exp_2;
+    }
+
+    // Enforce that -v + Sum(b_i * 2^i, i = 0..n-1) = 0 => Sum(b_i * 2^i, i = 0..n-1) = v
+    cs.constrain(constraint.iter().collect());
+
+    Ok(())
+}

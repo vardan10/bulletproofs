@@ -65,6 +65,10 @@ required-features = ["yoloproofs"]
 name = "gadget_not_equals"
 required-features = ["yoloproofs"]
 
+[[test]]
+name = "gadget_bound_check"
+required-features = ["yoloproofs"]
+
 [[bench]]
 name = "range_proof"
 harness = false

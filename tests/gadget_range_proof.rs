@@ -6,12 +6,11 @@ extern crate rand;
 use bulletproofs::r1cs::{ConstraintSystem, R1CSError, R1CSProof, Variable, Prover, Verifier};
 use curve25519_dalek::scalar::Scalar;
 use bulletproofs::{BulletproofGens, PedersenGens};
-use merlin::Transcript;
 use curve25519_dalek::ristretto::CompressedRistretto;
 use bulletproofs::r1cs::LinearCombination;
 
 mod utils;
-use utils::AllocatedQuantity;
+use utils::{AllocatedQuantity, positive_no_gadget};
 
 /*struct PositiveNoGadget {}
 
@@ -74,38 +73,6 @@ impl PositiveNoGadget {
     }
 }*/
 
-/// Enforces that the quantity of v is in the range [0, 2^n).
-pub fn positive_no_gadget<CS: ConstraintSystem>(
-    cs: &mut CS,
-    v: AllocatedQuantity,
-    n: usize
-    ,) -> Result<(), R1CSError> {
-    let mut constraint = vec![(v.variable, -Scalar::one())];
-    let mut exp_2 = Scalar::one();
-    for i in 0..n {
-        // Create low-level variables and add them to constraints
-        let (a, b, o) = cs.allocate(|| {
-            let q: u64 = v.assignment.ok_or(R1CSError::MissingAssignment)?;
-            let bit: u64 = (q >> i) & 1;
-            Ok(((1 - bit).into(), bit.into(), Scalar::zero()))
-        })?;
-
-        // Enforce a * b = 0, so one of (a,b) is zero
-        cs.constrain(o.into());
-
-        // Enforce that a = 1 - b, so they both are 1 or 0.
-        cs.constrain(a + (b - 1u64));
-
-        constraint.push((b, exp_2)  );
-        exp_2 = exp_2 + exp_2;
-    }
-
-    // Enforce that -v + Sum(b_i * 2^i, i = 0..n-1) = 0 => Sum(b_i * 2^i, i = 0..n-1) = v
-    cs.constrain(constraint.iter().collect());
-
-    Ok(())
-}
-
 // v and c should be equal
 /*pub fn equality_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
@@ -139,7 +106,7 @@ mod tests {
     use merlin::Transcript;
 
     #[test]
-    fn bound_check_gadget() {
+    fn test_range_proof_gadget() {
         use rand::rngs::OsRng;
         use rand::Rng;
 
@@ -149,10 +116,10 @@ mod tests {
 
         let v = rng.gen_range(min, max);
         println!("v is {}", &v);
-        assert!(bound_check_helper(v, min, max).is_ok());
+        assert!(range_proof_helper(v, min, max).is_ok());
     }
 
-    fn bound_check_helper(v: u64, min: u64, max: u64) -> Result<(), R1CSError> {
+    fn range_proof_helper(v: u64, min: u64, max: u64) -> Result<(), R1CSError> {
         let pc_gens = PedersenGens::default();
         let bp_gens = BulletproofGens::new(128, 1);
 

@@ -22,11 +22,6 @@ pub fn bound_check_gadget<CS: ConstraintSystem>(
     min: u64,
     n: usize
 ) -> Result<(), R1CSError> {
-    // a = v - min;
-    let lc_a: LinearCombination = vec![(v.variable, Scalar::one()), (Variable::One(), -Scalar::from(min))].iter().collect();
-
-    // b = max - v;
-    let lc_b: LinearCombination = vec![(Variable::One(), Scalar::from(max)), (v.variable, -Scalar::one())].iter().collect();
 
     // a + b = max - min
     let lc_max_minus_min: LinearCombination = vec![(Variable::One(), Scalar::from(max-min))].iter().collect();

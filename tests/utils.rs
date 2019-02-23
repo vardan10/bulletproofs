@@ -87,7 +87,7 @@ pub fn positive_no_gadget<CS: ConstraintSystem>(
     v: AllocatedQuantity,
     n: usize
     ,) -> Result<(), R1CSError> {
-    let mut constraint = vec![(v.variable, -Scalar::one())];
+    let mut constraint_v = vec![(v.variable, -Scalar::one())];
     let mut exp_2 = Scalar::one();
     for i in 0..n {
         // Create low-level variables and add them to constraints
@@ -103,12 +103,12 @@ pub fn positive_no_gadget<CS: ConstraintSystem>(
         // Enforce that a = 1 - b, so they both are 1 or 0.
         cs.constrain(a + (b - 1u64));
 
-        constraint.push((b, exp_2)  );
+        constraint_v.push((b, exp_2)  );
         exp_2 = exp_2 + exp_2;
     }
 
     // Enforce that -v + Sum(b_i * 2^i, i = 0..n-1) = 0 => Sum(b_i * 2^i, i = 0..n-1) = v
-    cs.constrain(constraint.iter().collect());
+    cs.constrain(constraint_v.iter().collect());
 
     Ok(())
 }

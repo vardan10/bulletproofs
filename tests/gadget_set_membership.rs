@@ -23,7 +23,7 @@ pub fn bit_gadget<CS: ConstraintSystem>(
     })?;
 
     // Might not be necessary if above TODO is addressed
-    // Variable b is same as v so b +
+    // Variable b is same as v so b + (-v) = 0
     let neg_v: LinearCombination = vec![(v.variable, -Scalar::one())].iter().collect();
     cs.constrain(b + neg_v);
 

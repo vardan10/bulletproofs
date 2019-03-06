@@ -9,7 +9,7 @@ use curve25519_dalek::ristretto::CompressedRistretto;
 use bulletproofs::r1cs::LinearCombination;
 
 mod utils;
-use utils::{AllocatedScalar, is_zero_gadget, is_nonzero_gadget};
+use utils::{AllocatedScalar, is_nonzero_gadget};
 
 // Ensure `v` is not equal to expected
 pub fn not_equals_gadget<CS: ConstraintSystem>(

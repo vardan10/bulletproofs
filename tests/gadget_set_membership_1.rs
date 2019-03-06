@@ -9,17 +9,18 @@ use curve25519_dalek::ristretto::CompressedRistretto;
 use bulletproofs::r1cs::LinearCombination;
 
 mod utils;
-use utils::{AllocatedScalar, is_nonzero_gadget};
+use utils::AllocatedScalar;
 
 
-pub fn set_non_membership_gadget<CS: ConstraintSystem>(
+pub fn set_membership_1_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     v: AllocatedScalar,
     diff_vars: Vec<AllocatedScalar>,
-    diff_inv_vars: Vec<AllocatedScalar>,
     set: &[u64]
 ) -> Result<(), R1CSError> {
     let set_length = set.len();
+    // Accumulates product of elements in `diff_vars`
+    let mut product: LinearCombination = Variable::One().into();
 
     for i in 0..set_length {
         // Take difference of value and each set element, `v - set[i]`
@@ -29,9 +30,12 @@ pub fn set_non_membership_gadget<CS: ConstraintSystem>(
         // Since `diff_vars[i]` is `set[i] - v`, `v - set[i]` + `diff_vars[i]` should be 0
         cs.constrain(diff_vars[i].variable + v_minus_elem);
 
-        // Ensure `set[i] - v` is non-zero
-        is_nonzero_gadget(cs, diff_vars[i], diff_inv_vars[i])?;
+        let (_, _, o) = cs.multiply(product.clone(), diff_vars[i].variable.into());
+        product = o.into();
     }
+
+    // Ensure product of elements if `diff_vars` is 0
+    cs.constrain(product);
 
     Ok(())
 }
@@ -42,15 +46,16 @@ mod tests {
     use merlin::Transcript;
 
     #[test]
-    fn set_non_membership_check_gadget() {
+    fn set_membership_1_check_gadget() {
         let set: Vec<u64> = vec![2, 3, 5, 6, 8, 20, 25];
-        let value = 10u64;
+        let value = 20u64;
 
-        assert!(set_non_membership_check_helper(value, set).is_ok());
+        assert!(set_membership_1_check_helper(value, set).is_ok());
     }
 
-    // Prove that difference between each set element and value is non-zero, hence value does not equal any set element.
-    fn set_non_membership_check_helper(value: u64, set: Vec<u64>) -> Result<(), R1CSError> {
+    // Prove that difference between 1 set element and value is zero, hence value does not equal any set element.
+    // For this create a vector of differences and prove that product of elements of such vector is 0
+    fn set_membership_1_check_helper(value: u64, set: Vec<u64>) -> Result<(), R1CSError> {
         let pc_gens = PedersenGens::default();
         let bp_gens = BulletproofGens::new(128, 1);
 
@@ -59,13 +64,12 @@ mod tests {
         let (proof, commitments) = {
             let mut comms: Vec<CompressedRistretto> = vec![];
             let mut diff_vars: Vec<AllocatedScalar> = vec![];
-            let mut diff_inv_vars: Vec<AllocatedScalar> = vec![];
 
-            let mut prover_transcript = Transcript::new(b"SetNonMemebershipTest");
+            let mut prover_transcript = Transcript::new(b"SetMemebership1Test");
             let mut rng = rand::thread_rng();
 
             let mut prover = Prover::new(&bp_gens, &pc_gens, &mut prover_transcript);
-            let value= Scalar::from(value);
+            let value = Scalar::from(value);
             let (com_value, var_value) = prover.commit(value.clone(), Scalar::random(&mut rng));
             let alloc_scal = AllocatedScalar {
                 variable: var_value,
@@ -76,7 +80,6 @@ mod tests {
             for i in 0..set_length {
                 let elem = Scalar::from(set[i]);
                 let diff = elem - value;
-                let diff_inv = diff.invert();
 
                 // Take difference of set element and value, `set[i] - value`
                 let (com_diff, var_diff) = prover.commit(diff.clone(), Scalar::random(&mut rng));
@@ -86,28 +89,18 @@ mod tests {
                 };
                 diff_vars.push(alloc_scal_diff);
                 comms.push(com_diff);
-
-                // Inverse needed to prove that difference `set[i] - value` is non-zero
-                let (com_diff_inv, var_diff_inv) = prover.commit(diff_inv.clone(), Scalar::random(&mut rng));
-                let alloc_scal_diff_inv = AllocatedScalar {
-                    variable: var_diff_inv,
-                    assignment: Some(diff_inv),
-                };
-                diff_inv_vars.push(alloc_scal_diff_inv);
-                comms.push(com_diff_inv);
             }
 
-            assert!(set_non_membership_gadget(&mut prover, alloc_scal, diff_vars, diff_inv_vars, &set).is_ok());
+            assert!(set_membership_1_gadget(&mut prover, alloc_scal, diff_vars, &set).is_ok());
 
             let proof = prover.prove()?;
 
             (proof, comms)
         };
 
-        let mut verifier_transcript = Transcript::new(b"SetNonMemebershipTest");
+        let mut verifier_transcript = Transcript::new(b"SetMemebership1Test");
         let mut verifier = Verifier::new(&bp_gens, &pc_gens, &mut verifier_transcript);
         let mut diff_vars: Vec<AllocatedScalar> = vec![];
-        let mut diff_inv_vars: Vec<AllocatedScalar> = vec![];
 
         let var_val = verifier.commit(commitments[0]);
         let alloc_scal = AllocatedScalar {
@@ -116,22 +109,15 @@ mod tests {
         };
 
         for i in 1..set_length+1 {
-            let var_diff = verifier.commit(commitments[2*i-1]);
+            let var_diff = verifier.commit(commitments[i]);
             let alloc_scal_diff = AllocatedScalar {
                 variable: var_diff,
                 assignment: None,
             };
             diff_vars.push(alloc_scal_diff);
-
-            let var_diff_inv = verifier.commit(commitments[2*i]);
-            let alloc_scal_diff_inv = AllocatedScalar {
-                variable: var_diff_inv,
-                assignment: None,
-            };
-            diff_inv_vars.push(alloc_scal_diff_inv);
         }
 
-        assert!(set_non_membership_gadget(&mut verifier, alloc_scal, diff_vars, diff_inv_vars, &set).is_ok());
+        assert!(set_membership_1_gadget(&mut verifier, alloc_scal, diff_vars, &set).is_ok());
 
         Ok(verifier.verify(&proof)?)
     }

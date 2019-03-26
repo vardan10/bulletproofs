@@ -24,10 +24,9 @@ use inner_product_proof::inner_product;
 /// When all constraints are added, the proving code calls `prove`
 /// which consumes the `Prover` instance, samples random challenges
 /// that instantiate the randomized constraints, and creates a complete proof.
-pub struct Prover<'a, 'b> {
-    transcript: &'a mut Transcript,
-    bp_gens: &'b BulletproofGens,
-    pc_gens: &'b PedersenGens,
+pub struct Prover<'t, 'g> {
+    transcript: &'t mut Transcript,
+    pc_gens: &'g PedersenGens,
     /// The constraints accumulated so far.
     constraints: Vec<LinearCombination>,
     /// Stores assignments to the "left" of multiplication gates
@@ -43,7 +42,10 @@ pub struct Prover<'a, 'b> {
 
     /// This list holds closures that will be called in the second phase of the protocol,
     /// when non-randomized variables are committed.
-    deferred_constraints: Vec<Box<Fn(&mut RandomizingProver<'a, 'b>) -> Result<(), R1CSError>>>,
+    deferred_constraints: Vec<Box<Fn(&mut RandomizingProver<'t, 'g>) -> Result<(), R1CSError>>>,
+
+    /// Index of a pending multiplier that's not fully assigned yet.
+    pending_multiplier: Option<usize>,
 }
 
 /// Prover in the randomizing phase.
@@ -53,12 +55,12 @@ pub struct Prover<'a, 'b> {
 /// monomorphize the closures for the proving and verifying code.
 /// However, this type cannot be instantiated by the user and therefore can only be used within
 /// the callback provided to `specify_randomized_constraints`.
-pub struct RandomizingProver<'a, 'b> {
-    prover: Prover<'a, 'b>,
+pub struct RandomizingProver<'t, 'g> {
+    prover: Prover<'t, 'g>,
 }
 
 /// Overwrite secrets with null bytes when they go out of scope.
-impl<'a, 'b> Drop for Prover<'a, 'b> {
+impl<'t, 'g> Drop for Prover<'t, 'g> {
     fn drop(&mut self) {
         self.v.clear();
         self.v_blinding.clear();
@@ -81,8 +83,8 @@ impl<'a, 'b> Drop for Prover<'a, 'b> {
     }
 }
 
-impl<'a, 'b> ConstraintSystem for Prover<'a, 'b> {
-    type RandomizedCS = RandomizingProver<'a, 'b>;
+impl<'t, 'g> ConstraintSystem for Prover<'t, 'g> {
+    type RandomizedCS = RandomizingProver<'t, 'g>;
 
     fn multiply(
         &mut self,
@@ -112,11 +114,33 @@ impl<'a, 'b> ConstraintSystem for Prover<'a, 'b> {
         (l_var, r_var, o_var)
     }
 
-    fn allocate<F>(&mut self, assign_fn: F) -> Result<(Variable, Variable, Variable), R1CSError>
-    where
-        F: FnOnce() -> Result<(Scalar, Scalar, Scalar), R1CSError>,
-    {
-        let (l, r, o) = assign_fn()?;
+    fn allocate(&mut self, assignment: Option<Scalar>) -> Result<Variable, R1CSError> {
+        let scalar = assignment.ok_or(R1CSError::MissingAssignment)?;
+
+        match self.pending_multiplier {
+            None => {
+                let i = self.a_L.len();
+                self.pending_multiplier = Some(i);
+                self.a_L.push(scalar);
+                self.a_R.push(Scalar::zero());
+                self.a_O.push(Scalar::zero());
+                Ok(Variable::MultiplierLeft(i))
+            }
+            Some(i) => {
+                self.pending_multiplier = None;
+                self.a_R[i] = scalar;
+                self.a_O[i] = self.a_L[i] * self.a_R[i];
+                Ok(Variable::MultiplierRight(i))
+            }
+        }
+    }
+
+    fn allocate_multiplier(
+        &mut self,
+        input_assignments: Option<(Scalar, Scalar)>,
+    ) -> Result<(Variable, Variable, Variable), R1CSError> {
+        let (l, r) = input_assignments.ok_or(R1CSError::MissingAssignment)?;
+        let o = l * r;
 
         // Create variables for l,r,o ...
         let l_var = Variable::MultiplierLeft(self.a_L.len());
@@ -145,7 +169,7 @@ impl<'a, 'b> ConstraintSystem for Prover<'a, 'b> {
     }
 }
 
-impl<'a, 'b> ConstraintSystem for RandomizingProver<'a, 'b> {
+impl<'t, 'g> ConstraintSystem for RandomizingProver<'t, 'g> {
     type RandomizedCS = Self;
 
     fn multiply(
@@ -156,11 +180,15 @@ impl<'a, 'b> ConstraintSystem for RandomizingProver<'a, 'b> {
         self.prover.multiply(left, right)
     }
 
-    fn allocate<F>(&mut self, assign_fn: F) -> Result<(Variable, Variable, Variable), R1CSError>
-    where
-        F: FnOnce() -> Result<(Scalar, Scalar, Scalar), R1CSError>,
-    {
-        self.prover.allocate(assign_fn)
+    fn allocate(&mut self, assignment: Option<Scalar>) -> Result<Variable, R1CSError> {
+        self.prover.allocate(assignment)
+    }
+
+    fn allocate_multiplier(
+        &mut self,
+        input_assignments: Option<(Scalar, Scalar)>,
+    ) -> Result<(Variable, Variable, Variable), R1CSError> {
+        self.prover.allocate_multiplier(input_assignments)
     }
 
     fn constrain(&mut self, lc: LinearCombination) {
@@ -175,13 +203,13 @@ impl<'a, 'b> ConstraintSystem for RandomizingProver<'a, 'b> {
     }
 }
 
-impl<'a, 'b> RandomizedConstraintSystem for RandomizingProver<'a, 'b> {
+impl<'t, 'g> RandomizedConstraintSystem for RandomizingProver<'t, 'g> {
     fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar {
         self.prover.transcript.challenge_scalar(label)
     }
 }
 
-impl<'a, 'b> Prover<'a, 'b> {
+impl<'t, 'g> Prover<'t, 'g> {
     /// Construct an empty constraint system with specified external
     /// input variables.
     ///
@@ -202,16 +230,11 @@ impl<'a, 'b> Prover<'a, 'b> {
     /// # Returns
     ///
     /// Returns a new `Prover` instance.
-    pub fn new(
-        bp_gens: &'b BulletproofGens,
-        pc_gens: &'b PedersenGens,
-        transcript: &'a mut Transcript,
-    ) -> Self {
+    pub fn new(pc_gens: &'g PedersenGens, transcript: &'t mut Transcript) -> Self {
         transcript.r1cs_domain_sep();
 
         Prover {
             pc_gens,
-            bp_gens,
             transcript,
             v: Vec::new(),
             v_blinding: Vec::new(),
@@ -220,6 +243,7 @@ impl<'a, 'b> Prover<'a, 'b> {
             a_R: Vec::new(),
             a_O: Vec::new(),
             deferred_constraints: Vec::new(),
+            pending_multiplier: None,
         }
     }
 
@@ -321,6 +345,9 @@ impl<'a, 'b> Prover<'a, 'b> {
     /// Calls all remembered callbacks with an API that
     /// allows generating challenge scalars.
     fn create_randomized_constraints(mut self) -> Result<Self, R1CSError> {
+        // Clear the pending multiplier (if any) because it was committed into A_L/A_R/S.
+        self.pending_multiplier = None;
+
         // Note: the wrapper could've used &mut instead of ownership,
         // but specifying lifetimes for boxed closures is not going to be nice,
         // so we move the self into wrapper and then move it back out afterwards.
@@ -333,7 +360,7 @@ impl<'a, 'b> Prover<'a, 'b> {
     }
 
     /// Consume this `ConstraintSystem` to produce a proof.
-    pub fn prove(mut self) -> Result<R1CSProof, R1CSError> {
+    pub fn prove(mut self, bp_gens: &BulletproofGens) -> Result<R1CSProof, R1CSError> {
         use std::iter;
         use util;
 
@@ -371,12 +398,12 @@ impl<'a, 'b> Prover<'a, 'b> {
         // Commit to the first-phase low-level witness variables.
         let n1 = self.a_L.len();
 
-        if self.bp_gens.gens_capacity < n1 {
+        if bp_gens.gens_capacity < n1 {
             return Err(R1CSError::InvalidGeneratorsLength);
         }
 
         // We are performing a single-party circuit proof, so party index is 0.
-        let gens = self.bp_gens.share(0);
+        let gens = bp_gens.share(0);
 
         let i_blinding1 = Scalar::random(&mut rng);
         let o_blinding1 = Scalar::random(&mut rng);
@@ -429,7 +456,7 @@ impl<'a, 'b> Prover<'a, 'b> {
         let padded_n = self.a_L.len().next_power_of_two();
         let pad = padded_n - n;
 
-        if self.bp_gens.gens_capacity < padded_n {
+        if bp_gens.gens_capacity < padded_n {
             return Err(R1CSError::InvalidGeneratorsLength);
         }
 

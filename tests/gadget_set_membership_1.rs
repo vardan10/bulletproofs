@@ -93,6 +93,8 @@ mod tests {
 
             assert!(set_membership_1_gadget(&mut prover, alloc_scal, diff_vars, &set).is_ok());
 
+            println!("For set size {}, no of constraints is {}", &set_length, &prover.num_constraints());
+
             let proof = prover.prove()?;
 
             (proof, comms)

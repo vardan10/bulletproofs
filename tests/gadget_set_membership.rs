@@ -17,10 +17,10 @@ pub fn bit_gadget<CS: ConstraintSystem>(
     v: AllocatedQuantity
 ) -> Result<(), R1CSError> {
     // TODO: Possible to save reallocation of `v` in `bit`?
-    let (a, b, o) = cs.allocate(|| {
-        let bit: u64 = v.assignment.ok_or(R1CSError::MissingAssignment)?;
-        Ok(((1 - bit).into(), bit.into(), Scalar::zero()))
-    })?;
+    let (a, b, o) = cs.allocate_multiplier(v.assignment.map(|q| {
+        let bit: u64 = (q >> i) & 1;
+        ((1 - bit).into(), bit.into())
+    }))?;
 
     // Might not be necessary if above TODO is addressed
     // Variable b is same as v so b + (-v) = 0
@@ -65,12 +65,18 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
 
     for i in 0..items.len() {
 
-        // TODO: Possible to save reallocation of elements of `vector` in `bit`?
-        let (a, b, o) = cs.allocate(|| {
+        // TODO: Possible to save reallocation of elements of `vector` in `bit`? If circuit variables for vector are passed, then yes.
+        let (a, b, o) = cs.allocate_multiplier(|| {
             let bit: u64 = vector[i].assignment.ok_or(R1CSError::MissingAssignment)?;
             let val = value.assignment.ok_or(R1CSError::MissingAssignment)?;
             Ok((items[i].into(), bit.into(), (bit*val).into()))
         })?;
+
+        let (a, b, o) = cs.allocate_multiplier(vector[i].assignment.map( |bit| {
+            let val = value.assignment.ok_or(R1CSError::MissingAssignment)?;
+            Ok((items[i].into(), bit.into(), (bit*val).into()))
+        }))?;
+
 
         constraints.push((o, Scalar::one()));
 
@@ -121,7 +127,7 @@ mod tests {
             let mut prover_transcript = Transcript::new(b"SetMemebershipTest");
             let mut rng = rand::thread_rng();
 
-            let mut prover = Prover::new(&bp_gens, &pc_gens, &mut prover_transcript);
+            let mut prover = Prover::new(&pc_gens, &mut prover_transcript);
 
             let mut bit_vars = vec![];
             for b in bit_map {
@@ -148,13 +154,13 @@ mod tests {
 
             println!("For set size {}, no of constraints is {}", &set_length, &prover.num_constraints());
 //            println!("Prover commitments {:?}", &comms);
-            let proof = prover.prove()?;
+            let proof = prover.prove(&bp_gens)?;
 
             (proof, comms)
         };
 
         let mut verifier_transcript = Transcript::new(b"SetMemebershipTest");
-        let mut verifier = Verifier::new(&bp_gens, &pc_gens, &mut verifier_transcript);
+        let mut verifier = Verifier::new(&mut verifier_transcript);
         let mut bit_vars = vec![];
 
         for i in 0..set_length {
@@ -179,7 +185,7 @@ mod tests {
 
 //        println!("Verifier commitments {:?}", &commitments);
 
-        Ok(verifier.verify(&proof)?)
+        Ok(verifier.verify(&proof, &pc_gens, &bp_gens)?)
     }
 }
 

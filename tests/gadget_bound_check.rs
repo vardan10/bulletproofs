@@ -73,7 +73,7 @@ mod tests {
             // Prover makes a `ConstraintSystem` instance representing a range proof gadget
             let mut prover_transcript = Transcript::new(b"BoundsTest");
             let mut rng = rand::thread_rng();
-            let mut prover = Prover::new(&bp_gens, &pc_gens, &mut prover_transcript);
+            let mut prover = Prover::new(&pc_gens, &mut prover_transcript);
 
             let (com_v, var_v) = prover.commit(v.into(), Scalar::random(&mut rng));
             let quantity_v = AllocatedQuantity {
@@ -98,13 +98,13 @@ mod tests {
 
             assert!(bound_check_gadget(&mut prover, quantity_v, quantity_a, quantity_b, max, min, n).is_ok());
 
-            let proof = prover.prove()?;
+            let proof = prover.prove(&bp_gens)?;
 
             (proof, comms)
         };
 
         let mut verifier_transcript = Transcript::new(b"BoundsTest");
-        let mut verifier = Verifier::new(&bp_gens, &pc_gens, &mut verifier_transcript);
+        let mut verifier = Verifier::new(&mut verifier_transcript);
 
         let var_v = verifier.commit(commitments[0]);
         let quantity_v = AllocatedQuantity {
@@ -126,6 +126,6 @@ mod tests {
 
         assert!(bound_check_gadget(&mut verifier, quantity_v, quantity_a, quantity_b, max, min, n).is_ok());
 
-        Ok(verifier.verify(&proof)?)
+        Ok(verifier.verify(&proof, &pc_gens, &bp_gens)?)
     }
 }

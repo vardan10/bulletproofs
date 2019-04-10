@@ -91,11 +91,15 @@ pub fn positive_no_gadget<CS: ConstraintSystem>(
     let mut exp_2 = Scalar::one();
     for i in 0..n {
         // Create low-level variables and add them to constraints
-        let (a, b, o) = cs.allocate(|| {
+        /*let (a, b, o) = cs.allocate_multiplier(|| {
             let q: u64 = v.assignment.ok_or(R1CSError::MissingAssignment)?;
             let bit: u64 = (q >> i) & 1;
             Ok(((1 - bit).into(), bit.into(), Scalar::zero()))
-        })?;
+        })?;*/
+        let (a, b, o) = cs.allocate_multiplier(v.assignment.map(|q| {
+            let bit: u64 = (q >> i) & 1;
+            ((1 - bit).into(), bit.into())
+        }))?;
 
         // Enforce a * b = 0, so one of (a,b) is zero
         cs.constrain(o.into());

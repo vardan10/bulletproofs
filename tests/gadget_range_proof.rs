@@ -138,7 +138,7 @@ mod tests {
             let mut prover_transcript = Transcript::new(b"BoundsTest");
             let mut rng = rand::thread_rng();
 
-            let mut prover = Prover::new(&bp_gens, &pc_gens, &mut prover_transcript);
+            let mut prover = Prover::new(&pc_gens, &mut prover_transcript);
 
             // Constrain a in [0, 2^n)
             let (com_a, var_a) = prover.commit(a.into(), Scalar::random(&mut rng));
@@ -164,7 +164,7 @@ mod tests {
 
             println!("For {} in ({}, {}), no of constraints is {}", v, min, max, &prover.num_constraints());
 //            println!("Prover commitments {:?}", &comms);
-            let proof = prover.prove()?;
+            let proof = prover.prove(&bp_gens)?;
 
             (proof, comms)
         };
@@ -173,7 +173,7 @@ mod tests {
 
         // Verifier makes a `ConstraintSystem` instance representing a merge gadget
         let mut verifier_transcript = Transcript::new(b"BoundsTest");
-        let mut verifier = Verifier::new(&bp_gens, &pc_gens, &mut verifier_transcript);
+        let mut verifier = Verifier::new(&mut verifier_transcript);
 
         let var_a = verifier.commit(commitments[0]);
         let quantity_a = AllocatedQuantity {
@@ -195,6 +195,6 @@ mod tests {
         verifier.constrain(var_a + var_b - var_c);
 
         // Verifier verifies proof
-        Ok(verifier.verify(&proof)?)
+        Ok(verifier.verify(&proof, &pc_gens, &bp_gens)?)
     }
 }

@@ -45,9 +45,9 @@ required-features = ["yoloproofs"]
 name = "gadget_range_proof"
 required-features = ["yoloproofs"]
 
-[[test]]
-name = "gadget_set_membership"
-required-features = ["yoloproofs"]
+#[[test]]
+#name = "gadget_set_membership"
+#required-features = ["yoloproofs"]
 
 [[test]]
 name = "basic_r1cs"

@@ -56,7 +56,7 @@ mod tests {
 
             let mut prover_transcript = Transcript::new(b"NotEqualsTest");
             let mut rng = rand::thread_rng();
-            let mut prover = Prover::new(&bp_gens, &pc_gens, &mut prover_transcript);
+            let mut prover = Prover::new(&pc_gens, &mut prover_transcript);
 
             let value= Scalar::from(val);
             let (com_value, var_value) = prover.commit(value.clone(), Scalar::random(&mut rng));
@@ -84,13 +84,13 @@ mod tests {
 
             assert!(not_equals_gadget(&mut prover, alloc_scal, alloc_scal_diff, alloc_scal_diff_inv, &expected).is_ok());
 
-            let proof = prover.prove()?;
+            let proof = prover.prove(&bp_gens)?;
 
             (proof, comms)
         };
 
         let mut verifier_transcript = Transcript::new(b"NotEqualsTest");
-        let mut verifier = Verifier::new(&bp_gens, &pc_gens, &mut verifier_transcript);
+        let mut verifier = Verifier::new(&mut verifier_transcript);
 
         let var_val = verifier.commit(commitments[0]);
         let alloc_scal = AllocatedScalar {
@@ -112,6 +112,6 @@ mod tests {
 
         assert!(not_equals_gadget(&mut verifier, alloc_scal, alloc_scal_diff, alloc_scal_diff_inv, &expected).is_ok());
 
-        Ok(verifier.verify(&proof)?)
+        Ok(verifier.verify(&proof, &pc_gens, &bp_gens)?)
     }
 }

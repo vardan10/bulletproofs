@@ -25,7 +25,7 @@ mod tests {
 
         let (proof, commitments) = {
             let mut prover_transcript = Transcript::new(b"Factors");
-            let mut prover = Prover::new(&bp_gens, &pc_gens, &mut prover_transcript);
+            let mut prover = Prover::new(&pc_gens, &mut prover_transcript);
 
             let mut rng = rand::thread_rng();
 
@@ -36,13 +36,13 @@ mod tests {
             let lc: LinearCombination = vec![(Variable::One(), r.into())].iter().collect();
             prover.constrain(o -  lc);
 
-            let proof = prover.prove().unwrap();
+            let proof = prover.prove(&bp_gens).unwrap();
 
             (proof, (com_p, com_q))
         };
 
         let mut verifier_transcript = Transcript::new(b"Factors");
-        let mut verifier = Verifier::new(&bp_gens, &pc_gens, &mut verifier_transcript);
+        let mut verifier = Verifier::new(&mut verifier_transcript);
         let var_p = verifier.commit(commitments.0);
         let var_q = verifier.commit(commitments.1);
 
@@ -50,7 +50,7 @@ mod tests {
         let lc: LinearCombination = vec![(Variable::One(), r.into())].iter().collect();
         verifier.constrain(o -  lc);
 
-        assert!(verifier.verify(&proof).is_ok());
+        assert!(verifier.verify(&proof, &pc_gens, &bp_gens).is_ok());
     }
 
     #[test]
@@ -65,7 +65,7 @@ mod tests {
 
         let (proof, commitments) = {
             let mut prover_transcript = Transcript::new(b"Factors");
-            let mut prover = Prover::new(&bp_gens, &pc_gens, &mut prover_transcript);
+            let mut prover = Prover::new(&pc_gens, &mut prover_transcript);
 
             let mut rng = rand::thread_rng();
 
@@ -78,13 +78,13 @@ mod tests {
             let lc: LinearCombination = vec![(Variable::One(), s.into())].iter().collect();
             prover.constrain(o2 -  lc);
 
-            let proof = prover.prove().unwrap();
+            let proof = prover.prove(&bp_gens).unwrap();
 
             (proof, (com_p, com_q, com_r))
         };
 
         let mut verifier_transcript = Transcript::new(b"Factors");
-        let mut verifier = Verifier::new(&bp_gens, &pc_gens, &mut verifier_transcript);
+        let mut verifier = Verifier::new(&mut verifier_transcript);
         let var_p = verifier.commit(commitments.0);
         let var_q = verifier.commit(commitments.1);
         let var_r = verifier.commit(commitments.2);
@@ -94,6 +94,6 @@ mod tests {
         let lc: LinearCombination = vec![(Variable::One(), s.into())].iter().collect();
         verifier.constrain(o2 -  lc);
 
-        assert!(verifier.verify(&proof).is_ok());
+        assert!(verifier.verify(&proof, &pc_gens, &bp_gens).is_ok());
     }
 }

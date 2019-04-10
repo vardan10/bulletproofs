@@ -64,7 +64,7 @@ mod tests {
             let mut prover_transcript = Transcript::new(b"SetNonMemebershipTest");
             let mut rng = rand::thread_rng();
 
-            let mut prover = Prover::new(&bp_gens, &pc_gens, &mut prover_transcript);
+            let mut prover = Prover::new(&pc_gens, &mut prover_transcript);
             let value= Scalar::from(value);
             let (com_value, var_value) = prover.commit(value.clone(), Scalar::random(&mut rng));
             let alloc_scal = AllocatedScalar {
@@ -101,13 +101,13 @@ mod tests {
 
             println!("For set size {}, no of constraints is {}", &set_length, &prover.num_constraints());
 
-            let proof = prover.prove()?;
+            let proof = prover.prove(&bp_gens)?;
 
             (proof, comms)
         };
 
         let mut verifier_transcript = Transcript::new(b"SetNonMemebershipTest");
-        let mut verifier = Verifier::new(&bp_gens, &pc_gens, &mut verifier_transcript);
+        let mut verifier = Verifier::new(&mut verifier_transcript);
         let mut diff_vars: Vec<AllocatedScalar> = vec![];
         let mut diff_inv_vars: Vec<AllocatedScalar> = vec![];
 
@@ -135,6 +135,6 @@ mod tests {
 
         assert!(set_non_membership_gadget(&mut verifier, alloc_scal, diff_vars, diff_inv_vars, &set).is_ok());
 
-        Ok(verifier.verify(&proof)?)
+        Ok(verifier.verify(&proof, &pc_gens, &bp_gens)?)
     }
 }

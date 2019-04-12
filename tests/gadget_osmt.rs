@@ -22,6 +22,7 @@ mod mimc;
 use mimc::{mimc, MIMC_ROUNDS};
 use std::process::id;
 
+
 type DBVal = (Option<bool>, Scalar, Scalar);
 
 pub struct OptmzSparseMerkleTree<'a> {
@@ -79,10 +80,14 @@ impl<'a> OptmzSparseMerkleTree<'a> {
             let v = self.get_from_db(&cur_node);
             if need_proof { proof_vec.push(v.clone()); }
 
-            println!("Loop: {} cur_idx {:?}", i, scalar_to_u64_array(&cur_idx.to_scalar()));
+            let debug_cur_idx = scalar_to_u64_array(&cur_idx.to_scalar());
+            println!("Loop: {} cur_idx {:?}", i, debug_cur_idx);
 //            println!("Loop: cur_idx reduced {:?}", &reduce_field_repr_to_elem::<E>(cur_idx));
-            println!("Loop: db key {:?}", scalar_to_u64_array(&cur_node));
-            println!("Loop: db val ({:?}, {:?}, {:?})", &v.0, scalar_to_u64_array(&v.1), scalar_to_u64_array(&v.2));
+            let debug_cur_node = scalar_to_u64_array(&cur_node);
+            println!("Loop: db key {:?}", debug_cur_node);
+            let debug_v1 = scalar_to_u64_array(&v.1);
+            let debug_v2 = scalar_to_u64_array(&v.2);
+            println!("Loop: db val ({:?}, {:?}, {:?})", &v.0, debug_v1, debug_v2);
             if v.0.is_some() {
                 //if are_equal::<E>(&Scalar::from_repr(cur_idx).unwrap(), &v.1) {
                 /*println!("1Child:Num bits of child node idx={}", cur_idx.num_bits());
@@ -108,6 +113,10 @@ impl<'a> OptmzSparseMerkleTree<'a> {
             }
 
             cur_idx.shl();
+            /*if !cur_idx.to_non_reduced_scalar().is_canonical() {
+                cur_idx = ScalarBits::from_scalar(&cur_idx.to_scalar());
+            }*/
+            //cur_idx = ScalarBits::from_scalar(&cur_idx.to_scalar());
             //cur_idx = reduce_field_repr::<E>(cur_idx);
         }
 
@@ -173,7 +182,8 @@ impl<'a> OptmzSparseMerkleTree<'a> {
             let new_root = self.get_subtree_with_one_val(path, &val, depth);
             self.update_db(&new_root,
                            //(Some(true), Scalar::from_repr(path).unwrap(), val));
-                           (Some(true), path.to_scalar(), val));
+                           //(Some(true), path.to_scalar(), val));
+                           (Some(true), path.to_non_reduced_scalar(), val));
             return new_root
         }
 
@@ -181,7 +191,8 @@ impl<'a> OptmzSparseMerkleTree<'a> {
         let child = self.get_from_db(&root).clone();
         if child.0.is_some() {
             return self.update_one_val_subtree(path, val.clone(),
-                                               &ScalarBits::from_scalar(&child.1), child.2.clone(), depth)
+                                               //&ScalarBits::from_scalar(&child.1), child.2.clone(), depth)
+                                               &ScalarBits::from_scalar_dont_reduce(&child.1), child.2.clone(), depth)
         } else {
             let mut new_path = path.clone();
             new_path.shl();
@@ -202,8 +213,10 @@ impl<'a> OptmzSparseMerkleTree<'a> {
     fn update_one_val_subtree(&mut self, path_for_new_key: &ScalarBits,
                               val_for_new_key: Scalar, path_for_old_key: &ScalarBits,
                               val_for_old_key: Scalar, depth: usize) -> Scalar {
-        println!("Called update_one_val_subtree with new key-val {:?}={:?}", scalar_to_u64_array(&path_for_new_key.to_scalar()), scalar_to_u64_array(&val_for_new_key));
-        println!("Called update_one_val_subtree with old key-val {:?}={:?}", scalar_to_u64_array(&path_for_old_key.to_scalar()), scalar_to_u64_array(&val_for_old_key));
+        let debug_path_for_new_key = scalar_to_u64_array(&path_for_new_key.to_scalar());
+        let debug_path_for_old_key = scalar_to_u64_array(&path_for_old_key.to_scalar());
+        println!("Called update_one_val_subtree with new key-val {:?}={:?}", debug_path_for_new_key, scalar_to_u64_array(&val_for_new_key));
+        println!("Called update_one_val_subtree with old key-val {:?}={:?}", debug_path_for_old_key, scalar_to_u64_array(&val_for_old_key));
         if depth == self.depth {
             panic!("Error in update_one_val_subtree")
         }
@@ -213,28 +226,34 @@ impl<'a> OptmzSparseMerkleTree<'a> {
             next_new_path.shl();
             let mut next_old_path = path_for_old_key.clone();
             next_old_path.shl();
+            let debug_next_old_path = scalar_to_u64_array(&next_old_path.to_scalar());
+            let debug_next_new_path = scalar_to_u64_array(&next_new_path.to_scalar());
             if path_for_new_key.is_msb_set() {
                 if path_for_old_key.is_msb_set() {
                     (self.empty_tree_hashes[depth+1].clone(),
                      self.update_one_val_subtree(&next_new_path, val_for_new_key,
                                                  &next_old_path, val_for_old_key, depth+1))
                 } else {
-                    println!("Calling get_subtree_with_one_val with depth {} key-val {:?}={:?}", depth+1, scalar_to_u64_array(&next_old_path.to_scalar()), scalar_to_u64_array(&val_for_old_key));
+                    println!("Calling get_subtree_with_one_val with depth {} key-val {:?}={:?}", depth+1, debug_next_old_path, scalar_to_u64_array(&val_for_old_key));
                     let left_subtree_hash = self.get_subtree_with_one_val(&next_old_path, &val_for_old_key, depth+1);
-                    println!("Calling get_subtree_with_one_val with depth {} key-val {:?}={:?}", depth+1, scalar_to_u64_array(&next_new_path.to_scalar()), scalar_to_u64_array(&val_for_new_key));
+                    println!("Calling get_subtree_with_one_val with depth {} key-val {:?}={:?}", depth+1, debug_next_new_path, scalar_to_u64_array(&val_for_new_key));
                     let right_subtree_hash = self.get_subtree_with_one_val(&next_new_path, &val_for_new_key, depth+1);
-                    self.update_db(&left_subtree_hash, (Some(true), next_old_path.to_scalar(), val_for_old_key));
-                    self.update_db(&right_subtree_hash, (Some(true), next_new_path.to_scalar(), val_for_new_key));
+                    //self.update_db(&left_subtree_hash, (Some(true), next_old_path.to_scalar(), val_for_old_key));
+                    self.update_db(&left_subtree_hash, (Some(true), next_old_path.to_non_reduced_scalar(), val_for_old_key));
+                    //self.update_db(&right_subtree_hash, (Some(true), next_new_path.to_scalar(), val_for_new_key));
+                    self.update_db(&right_subtree_hash, (Some(true), next_new_path.to_non_reduced_scalar(), val_for_new_key));
                     (left_subtree_hash, right_subtree_hash)
                 }
             } else {
                 if path_for_old_key.is_msb_set() {
-                    println!("Calling get_subtree_with_one_val with depth {} key-val {:?}={:?}", depth+1, scalar_to_u64_array(&next_new_path.to_scalar()), scalar_to_u64_array(&val_for_new_key));
+                    println!("Calling get_subtree_with_one_val with depth {} key-val {:?}={:?}", depth+1, debug_next_new_path, scalar_to_u64_array(&val_for_new_key));
                     let left_subtree_hash = self.get_subtree_with_one_val(&next_new_path, &val_for_new_key, depth+1);
-                    println!("Calling get_subtree_with_one_val with depth {} key-val {:?}={:?}", depth+1, scalar_to_u64_array(&next_old_path.to_scalar()), scalar_to_u64_array(&val_for_old_key));
+                    println!("Calling get_subtree_with_one_val with depth {} key-val {:?}={:?}", depth+1, debug_next_old_path, scalar_to_u64_array(&val_for_old_key));
                     let right_subtree_hash = self.get_subtree_with_one_val(&next_old_path, &val_for_old_key, depth+1);
-                    self.update_db(&left_subtree_hash, (Some(true), next_new_path.to_scalar(), val_for_new_key));
-                    self.update_db(&right_subtree_hash, (Some(true), next_old_path.to_scalar(), val_for_old_key));
+                    //self.update_db(&left_subtree_hash, (Some(true), next_new_path.to_scalar(), val_for_new_key));
+                    self.update_db(&left_subtree_hash, (Some(true), next_new_path.to_non_reduced_scalar(), val_for_new_key));
+                    //self.update_db(&right_subtree_hash, (Some(true), next_old_path.to_scalar(), val_for_old_key));
+                    self.update_db(&right_subtree_hash, (Some(true), next_old_path.to_non_reduced_scalar(), val_for_old_key));
                     (left_subtree_hash, right_subtree_hash)
                 } else {
                     (self.update_one_val_subtree(&next_new_path, val_for_new_key,
@@ -256,7 +275,6 @@ impl<'a> OptmzSparseMerkleTree<'a> {
 
         let (l, r) = {
             let mut new_path = path.clone();
-            //new_path.shl(1);
             new_path.shl();
             if path.is_msb_set() {
                 (self.empty_tree_hashes[depth+1].clone(),
@@ -323,8 +341,8 @@ mod tests {
             assert!(tree.verify_proof(s, s, &proof_vec, &tree.root));
         }
 
-        //let kvs: Vec<(Scalar, Scalar)> = (0..10).map(|_| (Scalar::random(&mut test_rng), Scalar::random(&mut test_rng))).collect();
-        let kvs: Vec<(Scalar, Scalar)> = vec![(Scalar::from(7227u32), Scalar::from(7227u32)), (Scalar::from(7700u32), Scalar::from(7700u32))];
+        let kvs: Vec<(Scalar, Scalar)> = (0..10).map(|_| (Scalar::random(&mut test_rng), Scalar::random(&mut test_rng))).collect();
+        //let kvs: Vec<(Scalar, Scalar)> = vec![(Scalar::from(7227u32), Scalar::from(7227u32)), (Scalar::from(7700u32), Scalar::from(7700u32))];
         for i in 0..kvs.len() {
             println!("Setting {:?}={:?}", scalar_to_u64_array(&kvs[i].0), scalar_to_u64_array(&kvs[i].1));
             tree.update(kvs[i].0, kvs[i].1);

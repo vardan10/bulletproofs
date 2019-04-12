@@ -41,7 +41,43 @@ impl ScalarBits {
         }
     }
 
+    pub fn from_scalar_dont_reduce(scalar: &Scalar) -> Self {
+        //let s = scalar.reduce();
+        let b = get_bits(scalar);
+        for i in TreeDepth..256 {
+            assert_eq!(b[i], 0);
+        }
+
+        let mut reduced_bits = [0; TreeDepth];
+        for i in 0..TreeDepth {
+            reduced_bits[i] = b[i];
+        }
+        Self {
+            bit_array: reduced_bits
+        }
+    }
+
     pub fn to_scalar(&self) -> Scalar {
+        /*let mut bytes: [u8; 32] = [0; 32];
+        let powers_of_2: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
+        let mut i = 0;
+        let mut current_byte = 0u8;
+        for b in self.bit_array.iter() {
+            if *b == 1 {
+                current_byte += powers_of_2[i % 8];
+            }
+            i += 1;
+            if (i % 8) == 0 {
+                bytes[(i / 8) -1] = current_byte;
+                current_byte = 0;
+            }
+        }
+        bytes[31] = current_byte;
+        Scalar::from_bits(bytes).reduce()*/
+        self.to_non_reduced_scalar().reduce()
+    }
+
+    pub fn to_non_reduced_scalar(&self) -> Scalar {
         let mut bytes: [u8; 32] = [0; 32];
         let powers_of_2: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
         let mut i = 0;
@@ -168,9 +204,10 @@ mod tests {
             println!("{:?}", e);*/
         }
 
-        /*let u = scalar_to_u64_array(&BASEPOINT_ORDER);
+        let o = BASEPOINT_ORDER - Scalar::one();
+        let u = scalar_to_u64_array(&o);
         let e = u64_array_to_scalar(&u);
-        assert_eq!(e, BASEPOINT_ORDER);*/
+        assert_eq!(e, o);
 
         {
             let u: [u64; 4] = [0, 0, 0, 1762596304162127872];

@@ -73,6 +73,18 @@ required-features = ["yoloproofs"]
 name = "gadget_set_membership_1"
 required-features = ["yoloproofs"]
 
+[[test]]
+name = "mimc"
+required-features = ["yoloproofs"]
+
+[[test]]
+name = "gadget_vsmt"
+required-features = ["yoloproofs"]
+
+[[test]]
+name = "gadget_osmt"
+required-features = ["yoloproofs"]
+
 [[bench]]
 name = "range_proof"
 harness = false

@@ -6,7 +6,6 @@ use bulletproofs::r1cs::{ConstraintSystem, R1CSError, R1CSProof, Variable, Prove
 use curve25519_dalek::scalar::Scalar;
 use bulletproofs::{BulletproofGens, PedersenGens};
 use merlin::Transcript;
-use curve25519_dalek::ristretto::CompressedRistretto;
 use bulletproofs::r1cs::LinearCombination;
 
 #[cfg(test)]

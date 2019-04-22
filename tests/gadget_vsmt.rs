@@ -280,7 +280,7 @@ mod tests {
             assert!(tree.verify_proof(s, s, &proof_vec, Some(&tree.root)));
         }
 
-        let kvs: Vec<(Scalar, Scalar)> = (0..1000).map(|_| (Scalar::random(&mut test_rng), Scalar::random(&mut test_rng))).collect();
+        let kvs: Vec<(Scalar, Scalar)> = (0..100).map(|_| (Scalar::random(&mut test_rng), Scalar::random(&mut test_rng))).collect();
         for i in 0..kvs.len() {
             tree.update(kvs[i].0, kvs[i].1);
         }

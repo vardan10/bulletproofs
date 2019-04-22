@@ -12,8 +12,9 @@ use bulletproofs::{BulletproofGens, PedersenGens};
 use merlin::Transcript;
 use bulletproofs::r1cs::LinearCombination;
 
-// For benchmarking
-use std::time::{Duration, Instant};
+
+mod utils;
+use utils::AllocatedQuantity;
 
 //pub const MIMC_ROUNDS: usize = 322;
 pub const MIMC_ROUNDS: usize = 10;
@@ -41,19 +42,27 @@ pub fn mimc(
     xl
 }
 
-/*pub fn hash_2(cs: &mut ConstraintSystem,
-              mut left_val: Option<Scalar>,
-              mut left: Variable,
-              mut right_val: Option<Scalar>,
-              mut right: Variable,
+/*pub fn hash_2<CS: ConstraintSystem>(cs: &mut CS,
+              mut left: AllocatedScalar,
+              mut right: AllocatedScalar,
               mimc_rounds: usize,
               mimc_constants: &[Scalar]) -> Result<(Option<Scalar>, Variable), R1CSError> {
     for j in 0..mimc_rounds {
         // xL, xR := xR + (xL + Ci)^3, xL
         //let cs = &mut cs.namespace(|| format!("mimc round {}", j));
+        let left_lc: LinearCombination = left.variable.into();
+        let right_lc: LinearCombination = right.variable.into();
+        let const_lc: LinearCombination = vec![(Variable::One(), mimc_constants[j])].iter().collect();
+
+        let left_plus_const: LinearCombination = left_lc + const_lc;
+
+        let (l, _, l_sqr) = cs.multiply(left_plus_const.clone(), left_plus_const);
+        let (_, _, l_cube) = cs.multiply(l_sqr.into(), l.into());
+
+        let new_l: LinearCombination = LinearCombination::from(l_cube) + right_lc;
 
         // tmp = (xL + Ci)^2
-        let mut tmp_value = left_val.map(|mut e| {
+        /*let mut tmp_value = left_val.map(|mut e| {
             e.add_assign(&mimc_constants[j]);
             e.square();
             e
@@ -104,28 +113,54 @@ pub fn mimc(
 
         // xL = new_xL
         left = new_xl;
-        left_val = new_xl_value;
+        left_val = new_xl_value;*/
     }
-    Ok((left_val, left))
+    unimplemented!()
+    //Ok((left_val, left))
 }*/
 
 
-#[test]
-fn test_mimc() {
-    let mut test_rng = ChaChaRng::from_seed([24u8; 32]);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    // For benchmarking
+    use std::time::{Duration, Instant};
 
-    // Generate the MiMC round constants
-    let constants = (0..MIMC_ROUNDS).map(|_| Scalar::random(&mut test_rng)).collect::<Vec<_>>();
+    #[test]
+    fn test_mimc() {
+        let mut test_rng = ChaChaRng::from_seed([24u8; 32]);
 
-    const SAMPLES: u32 = 50;
-    let mut total_proving = Duration::new(0, 0);
-    let mut total_verifying = Duration::new(0, 0);
+        // Generate the MiMC round constants
+        let constants = (0..MIMC_ROUNDS).map(|_| Scalar::random(&mut test_rng)).collect::<Vec<_>>();
 
-    for _ in 0..SAMPLES {
-        // Generate a random preimage and compute the image
-        let xl = Scalar::random(&mut test_rng);
-        let xr = Scalar::random(&mut test_rng);
-        let image = mimc(&xl, &xr, &constants);
+        let pc_gens = PedersenGens::default();
+        let bp_gens = BulletproofGens::new(128, 1);
 
+        const SAMPLES: u32 = 50;
+        let mut total_proving = Duration::new(0, 0);
+        let mut total_verifying = Duration::new(0, 0);
+
+        for _ in 0..SAMPLES {
+            // Generate a random preimage and compute the image
+            let xl = Scalar::random(&mut test_rng);
+            let xr = Scalar::random(&mut test_rng);
+            let image = mimc(&xl, &xr, &constants);
+
+            let (proof, commitments) = {
+                let mut prover_transcript = Transcript::new(b"MiMC");
+                let mut prover = Prover::new(&pc_gens, &mut prover_transcript);
+
+                let mut rng = rand::thread_rng();
+
+                let (com_l, var_l) = prover.commit(xl, Scalar::random(&mut rng));
+                let (com_r, var_r) = prover.commit(xr, Scalar::random(&mut rng));
+
+
+                let proof = prover.prove(&bp_gens).unwrap();
+
+                (proof, (com_l, com_r))
+            };
+        }
     }
+
 }

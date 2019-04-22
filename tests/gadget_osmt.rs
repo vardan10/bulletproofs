@@ -20,7 +20,6 @@ mod utils;
 use utils::AllocatedScalar;
 mod mimc;
 use mimc::{mimc, MIMC_ROUNDS};
-use std::process::id;
 
 
 type DBVal = (Option<bool>, Scalar, Scalar);

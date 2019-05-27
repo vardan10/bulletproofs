@@ -64,7 +64,6 @@ impl InnerProductProof {
         assert!(n.is_power_of_two());
 
         transcript.innerproduct_domain_sep(n as u64);
-        let c = inner_product(&a, &b);
         let lg_n = n.next_power_of_two().trailing_zeros() as usize;
         let mut L_vec = Vec::with_capacity(lg_n);
         let mut R_vec = Vec::with_capacity(lg_n);
@@ -133,7 +132,6 @@ impl InnerProductProof {
                 )
             }
 
-            let x1 = inner_product(&a_L, &b_L);
             a = a_L;
             b = b_L;
             G = G_L;

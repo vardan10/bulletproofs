@@ -10,6 +10,7 @@ use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::scalar::Scalar;
 use merlin::Transcript;
 use rand::thread_rng;
+use std::time::{Duration, Instant};
 
 // Shuffle gadget (documented in markdown file)
 
@@ -99,9 +100,8 @@ impl ShuffleProof {
             .unzip();
 
         ShuffleProof::gadget(&mut prover, input_vars, output_vars)?;
-
+        println!("For constraints {} and multipliers {} ", &prover.num_constraints(), &prover.num_multipliers());
         let proof = prover.prove(&bp_gens)?;
-
         Ok((ShuffleProof(proof), input_commitments, output_commitments))
     }
 }
@@ -157,11 +157,16 @@ fn kshuffle_helper(k: usize) {
         rand::thread_rng().shuffle(&mut output);
 
         let mut prover_transcript = Transcript::new(b"ShuffleProofTest");
-        ShuffleProof::prove(&pc_gens, &bp_gens, &mut prover_transcript, &input, &output).unwrap()
+        let start = Instant::now();
+        let r = ShuffleProof::prove(&pc_gens, &bp_gens, &mut prover_transcript, &input, &output).unwrap();
+        let end = start.elapsed();
+        println!("Proving time for {} is {:?}", &input.len(), end);
+        r
     };
 
     {
         let mut verifier_transcript = Transcript::new(b"ShuffleProofTest");
+        let start = Instant::now();
         assert!(proof
             .verify(
                 &pc_gens,
@@ -171,6 +176,8 @@ fn kshuffle_helper(k: usize) {
                 &output_commitments
             )
             .is_ok());
+        let end = start.elapsed();
+        println!("Verification time for {} is {:?}", input_commitments.len(), end);
     }
 }
 
@@ -216,7 +223,7 @@ fn shuffle_gadget_test_24() {
 
 #[test]
 fn shuffle_gadget_test_42() {
-    kshuffle_helper(42);
+    kshuffle_helper(100);
 }
 
 /// Constrains (a1 + a2) * (b1 + b2) = (c1 + c2)

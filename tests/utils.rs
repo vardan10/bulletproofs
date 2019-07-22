@@ -72,12 +72,6 @@ pub fn is_nonzero_gadget<CS: ConstraintSystem>(
     let (_, _, o2) = cs.multiply(x_lc.clone(), inv_lc.clone());
     // Output wire should have value `y`
     cs.constrain(o2 - y_lc);
-
-    // Ensure x_inv is the really the inverse of x by ensuring x*x_inv = 1
-    let (_, x_inv_var, o3) = cs.multiply(x_lc, inv_lc);
-    // Output wire should be 1
-    let one_lc: LinearCombination = vec![(Variable::One(), Scalar::one())].iter().collect();
-    cs.constrain(o3 - one_lc);
     Ok(())
 }
 

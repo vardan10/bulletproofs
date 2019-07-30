@@ -8,6 +8,9 @@ mod linear_combination;
 mod proof;
 mod prover;
 mod verifier;
+mod aggregator;
+mod aggr_prover;
+mod aggr_verifier;
 
 pub use self::constraint_system::{ConstraintSystem, RandomizedConstraintSystem};
 pub use self::linear_combination::{LinearCombination, Variable};

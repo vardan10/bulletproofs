@@ -13,8 +13,8 @@ use merlin::Transcript;
 use bulletproofs::r1cs::LinearCombination;
 
 
-mod utils;
-use utils::AllocatedQuantity;
+//mod utils;
+//use utils::AllocatedQuantity;
 
 //pub const MIMC_ROUNDS: usize = 322;
 pub const MIMC_ROUNDS: usize = 10;

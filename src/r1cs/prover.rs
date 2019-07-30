@@ -309,7 +309,7 @@ impl<'t, 'g> Prover<'t, 'g> {
     /// ```
     /// where `w{L,R,O}` is \\( z \cdot z^Q \cdot W_{L,R,O} \\).
     fn flattened_constraints(
-        &mut self,
+        &self,
         z: &Scalar,
     ) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Vec<Scalar>) {
         let n = self.a_L.len();
@@ -567,6 +567,7 @@ impl<'t, 'g> Prover<'t, 'g> {
             .iter()
             .chain(s_L2.iter())
             .zip(s_R1.iter().chain(s_R2.iter()));
+
         for (i, (sl, sr)) in sLsR.enumerate() {
             // l_poly.0 = 0
             // l_poly.1 = a_L + y^-n * (z * z^Q * W_R)
@@ -633,8 +634,6 @@ impl<'t, 'g> Prover<'t, 'g> {
 
         let mut r_vec = r_poly.eval(x);
         r_vec.append(&mut vec![Scalar::zero(); pad]);
-
-        let ip = inner_product(&l_vec, &r_vec);
 
         // XXX this should refer to the notes to explain why this is correct
         for i in n..padded_n {

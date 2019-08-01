@@ -212,6 +212,7 @@ impl<'t> AggrVerifier<'t> {
         &self,
         cur_proof_idx: usize,
         z: &Scalar,
+        z_offset: usize
     ) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar) {
         let sub_proof = &self.sub_proofs[cur_proof_idx];
         let n = sub_proof.num_vars;
@@ -223,7 +224,8 @@ impl<'t> AggrVerifier<'t> {
         let mut wV = vec![Scalar::zero(); m];
         let mut wc = Scalar::zero();
 
-        let mut exp_z = *z;
+        let mut exp_z = util::scalar_exp_vartime(z, z_offset as u64);
+
         for lc in sub_proof.constraints.iter() {
             for (var, coeff) in &lc.terms {
                 match var {
@@ -339,15 +341,17 @@ impl<'t> AggrVerifier<'t> {
         let mut H_vec = Vec::<RistrettoPoint>::new();
 
         let mut num_processed_vars = 0;
+        let mut z_offset = 1;
 
         for (i, sub_proof) in self.sub_proofs.iter().enumerate() {
             let num_vars = sub_proof.num_vars;
 
-            let (wL, wR, wO, mut wV, wc) = self.flattened_constraints(i, &z);
+            let (wL, wR, wO, mut wV, wc) = self.flattened_constraints(i, &z, z_offset);
+            z_offset += self.sub_proofs[i].constraints.len();
 
             let yneg_wR = wR
                 .into_iter()
-                .zip(y_inv_vec.iter())
+                .zip(y_inv_vec.iter().skip(num_processed_vars))
                 .map(|(wRi, exp_y_inv)| wRi * exp_y_inv)
                 .collect::<Vec<Scalar>>();
             let delta = inner_product(&yneg_wR, &wL);
@@ -356,7 +360,7 @@ impl<'t> AggrVerifier<'t> {
             weightsV.append(&mut wV);
 
 
-            // XXX: Avoid recomputation
+            // XXX: u_for_g and u_for_h can be computed once fro max num_vars of all proofs and then appropriate length slices can be taken.
             let u_for_g = iter::repeat(Scalar::one()).take(num_vars);
             let u_for_h = u_for_g.clone();
 
@@ -367,7 +371,7 @@ impl<'t> AggrVerifier<'t> {
                 .map(|((yneg_wRi, u_or_1), s_i)| u_or_1 * (x * yneg_wRi - a * s_i)).collect::<Vec<Scalar>>();
 
             let mut h = u_for_h
-                .zip(y_inv_vec.iter())
+                .zip(y_inv_vec.iter().skip(num_processed_vars))
                 .zip(s.iter().rev().skip(num_processed_vars).take(num_vars))
                 .zip(wL.into_iter())
                 .zip(wO.into_iter())

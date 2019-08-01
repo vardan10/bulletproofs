@@ -61,6 +61,12 @@ pub fn exp_iter(x: Scalar) -> ScalarExp {
     ScalarExp { x, next_exp_x }
 }
 
+/// Return an iterator of the powers of `x` starting from `start`. exp_iter_offset(x, J) will return iterator over J, J*x, J*x^2, J*x^3, J*x^4,....
+pub fn exp_iter_offset(x: Scalar, start: Scalar) -> ScalarExp {
+    let next_exp_x = start;
+    ScalarExp { x, next_exp_x }
+}
+
 pub fn add_vec(a: &[Scalar], b: &[Scalar]) -> Vec<Scalar> {
     if a.len() != b.len() {
         // throw some error

@@ -171,12 +171,17 @@ mod tests {
                                                         O,
                                                         S);
 
-        let t1 = prover_1.commit_to_polynomial(&y, &z);
-        let t2 = prover_2.commit_to_polynomial(&y, &z);
+        let mut y_offset = 0;
+        let mut z_offset = 1;
+
+        prover_1.commit_to_polynomial(&y, y_offset, &z, z_offset);
+        y_offset += prover_1.num_multipliers();
+        z_offset += prover_1.num_constraints();
+
+        prover_2.commit_to_polynomial(&y, y_offset, &z, z_offset);
 
         let (u, x) = aggregator.process_poly_commitment(vec![
-            t1,
-            t2,
+            &prover_1.T, &prover_2.T
         ]);
 
         let ps1 = prover_1.compute_poly(&x, &u, &y);

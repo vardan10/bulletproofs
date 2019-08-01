@@ -15,6 +15,131 @@ use std::process::exit;
 use util::scalar_exp_vartime;
 
 
+/*
+let pc_gens = PedersenGens::default();
+// one extra set of generators is used by aggregator in case of padding
+let bp_gens = BulletproofGens::new(...., <num of provers> + 1);
+
+let mut aggregator = Aggregator::new(&bp_gens, &pc_gens, b"some aggregation");
+
+// Create all provers. Each prover can be made to run over a separate constraint system
+let mut prover_1 = AggrProver::new(&pc_gens);
+let mut prover_2 = AggrProver::new(&pc_gens);
+....
+let mut prover_n = AggrProver::new(&pc_gens);
+
+// First prover commits to his high level variables and specifies all its constraints
+let (com1, var) = prover_1.commit(hidden_value, Scalar::random(&mut rng));
+    .......      prover_1.commit(.........
+    ..............
+prover_1.constrain(............)
+prover_1.constrain(..........)
+
+// Commits to low level variables
+let com_ll_1 = prover_1.commit_low_level_vars(&bp_gens.share(0));
+
+// Now second prover commits to his high level variables, specifies all its constraints and commits to its low level variables like 1st prover
+let (com2, var) = prover_2.commit(hidden_value, Scalar::random(&mut rng));
+............
+prover_2.constrain(.......)
+let com_ll_2 = prover_2.commit_low_level_vars(&bp_gens.share(0));
+
+// Similarly all provers follow the above procedure
+
+// Combine all provers' commitments to high level and low level variables
+let V = vec![com1, com2, .......];  // high level vars
+
+let I = vec![
+    com_ll_1.0,
+    com_ll_2.0,
+    ......
+];
+let O = vec![
+    com_ll_1.1,
+    com_ll_2.1,
+    .....
+];
+let S = vec![
+    com_ll_1.2,
+    com_ll_2.2,
+    ......
+];
+
+// Send these commitments to the aggregator to get the challenges
+let (y, z) = aggregator.process_var_commitments(V, I, O, S);
+
+// Each prover now commits to the polynomial. Since each prover uses different powers of y and z, they need to be told what is the offset
+let mut y_offset = 0;
+let mut z_offset = 1;
+
+prover_1.commit_to_polynomial(&y, y_offset, &z, z_offset);
+y_offset += prover_1.num_multipliers();
+z_offset += prover_1.num_constraints();
+
+prover_2.commit_to_polynomial(&y, y_offset, &z, z_offset);
+y_offset += prover_2.num_multipliers();
+z_offset += prover_2.num_constraints();
+
+...........
+.....
+
+prover_n.commit_to_polynomial(.........)
+
+// The aggregator now processes the polynomial commitments to return another tuple of challenges, u and x
+
+let (u, x) = aggregator.process_poly_commitment(vec![
+        &prover_1.T,
+        &prover_2.T,
+        .....
+]);
+
+// Each prover now evaluates the polynomial and outputs its contribution in the proof
+let ps1 = prover_1.compute_poly(&x, &u, &y);
+let ps2 = prover_2.compute_poly(&x, &u, &y);
+.......
+let psn = prover_n.compute_poly(&x, &u, &y);
+
+// Aggregator combines these contributions to create a proof
+let proof = aggregator.assemble_shares(vec![
+    &ps1,
+    &ps2,
+    &ps3,
+    &ps4,
+]).unwrap();
+
+
+// Verifier now processes each provers commitments in the same sequence as they were originally created. Also the constraints are created in the same order
+let mut verifier_transcript = Transcript::new(b"basic aggregation");
+let mut verifier = AggrVerifier::new(4, &mut verifier_transcript);
+
+// Process first prover's commitments
+let var_p1 = verifier.commit(com1);
+.....
+// Specify first prover's constraints
+verifier.constrain(.....);
+verifier.constrain(.....);
+.........
+
+// Mark ending of processing for first prover
+verifier.processed_sub_proof();
+
+// Process second prover's commitments and create its constrain
+let var_p2 = verifier.commit(com2);
+.....
+verifier.constrain(.....);
+verifier.constrain(.....);
+.........
+
+// Mark ending of processing for second prover
+verifier.processed_sub_proof();
+
+// Process for all provers
+.....
+
+// Verify proof
+assert!(verifier.verify(&proof, &pc_gens, &bp_gens).is_ok());
+*/
+
 pub struct Aggregator<'a> {
     bp_gens: &'a BulletproofGens,
     pc_gens: &'a PedersenGens,
@@ -159,7 +284,6 @@ impl<'a> Aggregator<'a> {
             exp_y = exp_y * self.y; // y^i -> y^(i+1)
         }
 
-        // TODO: It should be possible to compute less than padded_n powers of y by taking max variables out of all proofs and then keeping padding
         let exp_y_inv = util::exp_iter(self.y.invert()).take(padded_n).collect::<Vec<_>>();
 
         // Create G_factors, H_factors, G_vec, H_vec
@@ -168,12 +292,13 @@ impl<'a> Aggregator<'a> {
         let mut G_vec = Vec::<RistrettoPoint>::new();
         let mut H_vec = Vec::<RistrettoPoint>::new();
 
+        let mut num_processed_vars = 0;
+
         for (i, share) in proof_shares.iter().enumerate() {
-            // XXX: Redundant computation in g and h.
             let mut g = Vec::<Scalar>::new();
             g.append(&mut vec![Scalar::one(); share.n1]);
             g.append(&mut vec![self.u; share.n2]);
-            let mut h = exp_y_inv.iter().take(g.len())
+            let mut h = exp_y_inv.iter().skip(num_processed_vars).take(g.len())
                 .zip(g.iter())
                 .map(|(y, u_or_1)| y * u_or_1)
                 .collect::<Vec<_>>();
@@ -184,7 +309,11 @@ impl<'a> Aggregator<'a> {
             let mut hv: Vec<RistrettoPoint> = gens.H(share.n1 + share.n2).cloned().collect();
             G_vec.append(&mut gv);
             H_vec.append(&mut hv);
+
+            num_processed_vars += share.n1 + share.n2;
         }
+
+        assert_eq!(n, num_processed_vars);
 
         G_factors.append(&mut vec![self.u; pad]);
         H_factors.append(&mut exp_y_inv.iter().skip(n).take(pad)
@@ -310,16 +439,28 @@ mod tests {
                                                         O,
                                                         S);
 
-        let t1 = prover_1.commit_to_polynomial(&y, &z);
-        let t2 = prover_2.commit_to_polynomial(&y, &z);
-        let t3 = prover_3.commit_to_polynomial(&y, &z);
-        let t4 = prover_4.commit_to_polynomial(&y, &z);
+        let mut y_offset = 0;
+        let mut z_offset = 1;
+
+        prover_1.commit_to_polynomial(&y, y_offset, &z, z_offset);
+        y_offset += prover_1.num_multipliers();
+        z_offset += prover_1.num_constraints();
+
+        prover_2.commit_to_polynomial(&y, y_offset, &z, z_offset);
+        y_offset += prover_2.num_multipliers();
+        z_offset += prover_2.num_constraints();
+
+        prover_3.commit_to_polynomial(&y, y_offset, &z, z_offset);
+        y_offset += prover_3.num_multipliers();
+        z_offset += prover_3.num_constraints();
+
+        prover_4.commit_to_polynomial(&y, y_offset, &z, z_offset);
 
         let (u, x) = aggregator.process_poly_commitment(vec![
-            t1,
-            t2,
-            t3,
-            t4,
+            &prover_1.T,
+            &prover_2.T,
+            &prover_3.T,
+            &prover_4.T,
         ]);
 
         let ps1 = prover_1.compute_poly(&x, &u, &y);
@@ -434,14 +575,23 @@ mod tests {
                                                         O,
                                                         S);
 
-        let t1 = prover_1.commit_to_polynomial(&y, &z);
-        let t2 = prover_2.commit_to_polynomial(&y, &z);
-        let t3 = prover_3.commit_to_polynomial(&y, &z);
+        let mut y_offset = 0;
+        let mut z_offset = 1;
+
+        prover_1.commit_to_polynomial(&y, y_offset, &z, z_offset);
+        y_offset += prover_1.num_multipliers();
+        z_offset += prover_1.num_constraints();
+
+        prover_2.commit_to_polynomial(&y, y_offset, &z, z_offset);
+        y_offset += prover_2.num_multipliers();
+        z_offset += prover_2.num_constraints();
+
+        prover_3.commit_to_polynomial(&y, y_offset, &z, z_offset);
 
         let (u, x) = aggregator.process_poly_commitment(vec![
-            t1,
-            t2,
-            t3,
+            &prover_1.T,
+            &prover_2.T,
+            &prover_3.T,
         ]);
 
         let ps1 = prover_1.compute_poly(&x, &u, &y);
@@ -536,10 +686,17 @@ mod tests {
                                                         O,
                                                         S);
 
-        let t1 = prover_1.commit_to_polynomial(&y, &z);
-        let t2 = prover_2.commit_to_polynomial(&y, &z);
+        let mut y_offset = 0;
+        let mut z_offset = 1;
 
-        let (u, x) = aggregator.process_poly_commitment(vec![t1, t2]);
+        prover_1.commit_to_polynomial(&y, y_offset, &z, z_offset);
+        y_offset += prover_1.num_multipliers();
+        z_offset += prover_1.num_constraints();
+
+        prover_2.commit_to_polynomial(&y, y_offset, &z, z_offset);
+
+        let (u, x) = aggregator.process_poly_commitment(vec![&prover_1.T,
+                                                             &prover_2.T]);
 
         let ps1 = prover_1.compute_poly(&x, &u, &y);
         let ps2 = prover_2.compute_poly(&x, &u, &y);
@@ -644,11 +801,20 @@ mod tests {
                                                         O,
                                                         S);
 
-        let t1 = prover_1.commit_to_polynomial(&y, &z);
-        let t2 = prover_2.commit_to_polynomial(&y, &z);
-        let t3 = prover_3.commit_to_polynomial(&y, &z);
+        let mut y_offset = 0;
+        let mut z_offset = 1;
 
-        let (u, x) = aggregator.process_poly_commitment(vec![t1, t2, t3]);
+        prover_1.commit_to_polynomial(&y, y_offset, &z, z_offset);
+        y_offset += prover_1.num_multipliers();
+        z_offset += prover_1.num_constraints();
+
+        prover_2.commit_to_polynomial(&y, y_offset, &z, z_offset);
+        y_offset += prover_2.num_multipliers();
+        z_offset += prover_2.num_constraints();
+
+        prover_3.commit_to_polynomial(&y, y_offset, &z, z_offset);
+
+        let (u, x) = aggregator.process_poly_commitment(vec![&prover_1.T, &prover_2.T, &prover_3.T]);
 
         let ps1 = prover_1.compute_poly(&x, &u, &y);
         let ps2 = prover_2.compute_poly(&x, &u, &y);

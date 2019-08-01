@@ -66,16 +66,13 @@ pub struct AggrProver<'g> {
     S: RistrettoPoint,
 
     // Commitment to coefficients
-    T: Vec<RistrettoPoint>,
+    pub T: Vec<RistrettoPoint>,
     l_poly: VecPoly3,
     r_poly: VecPoly3,
     t_poly: Poly6,
     // Polynomial over the blindings
     t_blinding_poly: Poly6,
 
-    exp_y: Scalar,
-
-    exp_y_inv: Vec<Scalar>,
     /// This list holds closures that will be called in the second phase of the protocol,
     /// when non-randomized variables are committed.
     //deferred_constraints: Vec<Box<Fn(&mut RandomizingAggrProver<'g>) -> Result<(), R1CSError>>>,
@@ -277,8 +274,6 @@ impl<'g> AggrProver<'g> {
                 t5: Scalar::zero(),
                 t6: Scalar::zero(),
             },
-            exp_y: Scalar::zero(),
-            exp_y_inv:  Vec::new(),
             pending_multiplier: None,
         }
     }
@@ -295,6 +290,7 @@ impl<'g> AggrProver<'g> {
     fn flattened_constraints(
         &mut self,
         z: &Scalar,
+        z_offset: usize
     ) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Vec<Scalar>) {
         let n = self.a_L.len();
         let m = self.v.len();
@@ -304,7 +300,7 @@ impl<'g> AggrProver<'g> {
         let mut wO = vec![Scalar::zero(); n];
         let mut wV = vec![Scalar::zero(); m];
 
-        let mut exp_z = *z;
+        let mut exp_z = util::scalar_exp_vartime(z, z_offset as u64);
         for lc in self.constraints.iter() {
             for (var, coeff) in &lc.terms {
                 match var {
@@ -398,21 +394,32 @@ impl<'g> AggrProver<'g> {
         (&self.A, &self.O, &self.S)
     }
 
-    pub fn commit_to_polynomial(&mut self, y: &Scalar, z: &Scalar) -> &[RistrettoPoint] {
-        // TODO: Each prover should use different powers of y
+    pub fn commit_to_polynomial(&mut self, y: &Scalar, y_offset: usize, z: &Scalar, z_offset: usize) {
+        /*let mut rng = {
+            let mut builder = self.transcript.build_rng();
+
+            // Commit the blinding factors for the input wires
+            for v_b in &self.v_blinding {
+                builder = builder.commit_witness_bytes(b"v_blinding", v_b.as_bytes());
+            }
+
+            use rand::thread_rng;
+            builder.finalize(&mut thread_rng())
+        };*/
         // TODO: A single rng should be used across all funcs
         let mut rng = rand::thread_rng();
 
         let n = self.a_L.len();
 
-        let (wL, wR, wO, wV) = self.flattened_constraints(&z);
+        let (wL, wR, wO, wV) = self.flattened_constraints(&z, z_offset);
 
         let mut l_poly = VecPoly3::zero(n);
         let mut r_poly = VecPoly3::zero(n);
 
-        let mut exp_y = Scalar::one(); // y^n starting at n=0
+        //let mut exp_y = Scalar::one(); // y^n starting at n=0
+        let mut exp_y = util::scalar_exp_vartime(y, y_offset as u64);
         let y_inv = y.invert();
-        let exp_y_inv = util::exp_iter(y_inv).take(n).collect::<Vec<_>>();
+        let exp_y_inv = util::exp_iter_offset(y_inv, exp_y.invert()).take(n).collect::<Vec<_>>();
 
         let sLsR = self.s_L1
             .iter()
@@ -463,8 +470,6 @@ impl<'g> AggrProver<'g> {
         self.l_poly = l_poly;
         self.r_poly = r_poly;
         self.t_poly = t_poly;
-        self.exp_y = exp_y;
-        self.exp_y_inv = exp_y_inv;
 
         self.t_blinding_poly = Poly6 {
             t1: t_1_blinding,
@@ -479,8 +484,6 @@ impl<'g> AggrProver<'g> {
         self.T.push(T_4);
         self.T.push(T_5);
         self.T.push(T_6);
-
-       &self.T
     }
 
     pub fn compute_poly(&mut self, x: &Scalar, u: &Scalar, y: &Scalar) -> ProofShare {
@@ -507,5 +510,13 @@ impl<'g> AggrProver<'g> {
             n1: self.n1,
             n2: self.n2,
         }
+    }
+
+    pub fn num_constraints(&self) -> usize {
+        self.constraints.len()
+    }
+
+    pub fn num_multipliers(&self) -> usize {
+        self.a_O.len()
     }
 }

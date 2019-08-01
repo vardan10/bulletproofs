@@ -161,7 +161,6 @@ impl<'a> Aggregator<'a> {
 
         // TODO: It should be possible to compute less than padded_n powers of y by taking max variables out of all proofs and then keeping padding
         let exp_y_inv = util::exp_iter(self.y.invert()).take(padded_n).collect::<Vec<_>>();
-        //println!("exp_y_inv={:?}", &exp_y_inv);
 
         // Create G_factors, H_factors, G_vec, H_vec
         let mut G_factors = Vec::<Scalar>::new();
@@ -170,6 +169,7 @@ impl<'a> Aggregator<'a> {
         let mut H_vec = Vec::<RistrettoPoint>::new();
 
         for (i, share) in proof_shares.iter().enumerate() {
+            // XXX: Redundant computation in g and h.
             let mut g = Vec::<Scalar>::new();
             g.append(&mut vec![Scalar::one(); share.n1]);
             g.append(&mut vec![self.u; share.n2]);

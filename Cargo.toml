@@ -85,6 +85,10 @@ required-features = ["yoloproofs"]
 name = "gadget_osmt"
 required-features = ["yoloproofs"]
 
+[[test]]
+name = "test_aggregation"
+required-features = ["yoloproofs"]
+
 [[bench]]
 name = "range_proof"
 harness = false

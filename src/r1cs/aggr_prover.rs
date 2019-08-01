@@ -438,11 +438,7 @@ impl<'g> AggrProver<'g> {
             exp_y = exp_y * y; // y^i -> y^(i+1)
         }
 
-        //println!("prover's wR={:?}", &wR);
-        //println!("prover's yneg_wR={:?}", &yneg_wR);
-
         let t_poly = VecPoly3::special_inner_product(&l_poly, &r_poly);
-        //println!("prover's t_poly.t2={:?}", &t_poly.t2);
 
         let t_1_blinding = Scalar::random(&mut rng);
         let t_3_blinding = Scalar::random(&mut rng);

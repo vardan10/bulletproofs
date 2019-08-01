@@ -18,4 +18,8 @@ pub use self::proof::R1CSProof;
 pub use self::prover::Prover;
 pub use self::verifier::Verifier;
 
+pub use self::aggregator::Aggregator;
+pub use self::aggr_prover::AggrProver;
+pub use self::aggr_verifier::AggrVerifier;
+
 pub use errors::R1CSError;

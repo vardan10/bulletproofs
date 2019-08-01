@@ -40,11 +40,12 @@ pub fn set_non_membership_gadget<CS: ConstraintSystem>(
 mod tests {
     use super::*;
     use merlin::Transcript;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn set_non_membership_check_gadget() {
-        let set: Vec<u64> = vec![2, 3, 5, 6, 8, 20, 25];
-        let value = 10u64;
+        let set: Vec<u64> = vec![5, 9, 32, 1, 85, 2, 7, 11, 14, 26];
+        let value = 19u64;
 
         assert!(set_non_membership_check_helper(value, set).is_ok());
     }
@@ -56,6 +57,7 @@ mod tests {
 
         let set_length = set.len();
 
+        let start = Instant::now();
         let (proof, commitments) = {
             let mut comms: Vec<CompressedRistretto> = vec![];
             let mut diff_vars: Vec<AllocatedScalar> = vec![];
@@ -105,7 +107,10 @@ mod tests {
 
             (proof, comms)
         };
+        println!("Proving time for set nonmembership for set length {} is {:?}", &set.len(), start.elapsed());
+        println!("Proof size is {}", proof.to_bytes().len());
 
+        let start = Instant::now();
         let mut verifier_transcript = Transcript::new(b"SetNonMemebershipTest");
         let mut verifier = Verifier::new(&mut verifier_transcript);
         let mut diff_vars: Vec<AllocatedScalar> = vec![];
@@ -135,6 +140,8 @@ mod tests {
 
         assert!(set_non_membership_gadget(&mut verifier, alloc_scal, diff_vars, diff_inv_vars, &set).is_ok());
 
-        Ok(verifier.verify(&proof, &pc_gens, &bp_gens)?)
+        let r = Ok(verifier.verify(&proof, &pc_gens, &bp_gens)?);
+        println!("Verification time for set membership for set length {} is {:?}", &set.len(), start.elapsed());
+        r
     }
 }

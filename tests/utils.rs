@@ -57,11 +57,9 @@ pub fn is_nonzero_gadget<CS: ConstraintSystem>(
     x: AllocatedScalar,
     x_inv: AllocatedScalar,
 ) -> Result<(), R1CSError> {
-    let y: u32 = 1;
-
-    let x_lc: LinearCombination = vec![(x.variable, Scalar::one())].iter().collect();
-    let one_minus_y_lc: LinearCombination = vec![(Variable::One(), Scalar::from(1-y))].iter().collect();
-    let y_lc: LinearCombination = vec![(Variable::One(), Scalar::from(y))].iter().collect();
+    let x_lc = LinearCombination::from(x.variable);
+    let y_lc = LinearCombination::from(Scalar::one());
+    let one_minus_y_lc = LinearCombination::from(Variable::One()) - y_lc.clone();
 
     // x * (1-y) = 0
     let (_, _, o1) = cs.multiply(x_lc.clone(), one_minus_y_lc);
@@ -72,6 +70,7 @@ pub fn is_nonzero_gadget<CS: ConstraintSystem>(
     let (_, _, o2) = cs.multiply(x_lc.clone(), inv_lc.clone());
     // Output wire should have value `y`
     cs.constrain(o2 - y_lc);
+
     Ok(())
 }
 

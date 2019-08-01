@@ -323,7 +323,6 @@ impl<'t> AggrVerifier<'t> {
 
         let y_inv = y.invert();
         let y_inv_vec = util::exp_iter(y_inv).take(padded_n).collect::<Vec<Scalar>>();
-        //println!("y_inv_vec={:?}", &y_inv_vec);
 
         // combined delta + wc from each sub proof
         let mut delta_wc = Scalar::zero();
@@ -346,8 +345,6 @@ impl<'t> AggrVerifier<'t> {
 
             let (wL, wR, wO, mut wV, wc) = self.flattened_constraints(i, &z);
 
-            //println!("wR={:?}", &wR);
-
             let yneg_wR = wR
                 .into_iter()
                 .zip(y_inv_vec.iter())
@@ -358,7 +355,6 @@ impl<'t> AggrVerifier<'t> {
             V.append(&mut sub_proof.V.iter().map(|V_i| V_i.decompress()).collect::<Vec<Option<RistrettoPoint>>>());
             weightsV.append(&mut wV);
 
-            //println!("yneg_wR={:?}", &yneg_wR);
 
             // XXX: Avoid recomputation
             let u_for_g = iter::repeat(Scalar::one()).take(num_vars);
